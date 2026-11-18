@@ -4,6 +4,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+import java.util.Properties
+
+val localProps = Properties().apply {
+    val propsFile = rootProject.file("local.properties")
+    if (propsFile.exists()) propsFile.inputStream().use { stream -> load(stream) }
+}
+
 android {
     namespace = "ar.matu.oscpad"
     compileSdk = 35
@@ -16,9 +23,29 @@ android {
         versionName = "0.1.0"
     }
 
+    val keystorePath = localProps.getProperty("oscKeystore")
+    if (keystorePath != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = localProps.getProperty("oscStorePassword")
+                keyAlias = localProps.getProperty("oscKeyAlias")
+                keyPassword = localProps.getProperty("oscKeyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            if (keystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

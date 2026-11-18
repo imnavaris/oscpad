@@ -290,8 +290,15 @@ private fun App() {
                                     .fillParentMaxWidth()
                                     .fillParentMaxHeight()
                                     .onSizeChanged { if (it.width > 0) cellWpx = it.width.toFloat() }
-                                    .graphicsLayer { translationX = tx }
-                                    .zIndex(if (active) 1f else 0f)
+                                    .then(
+                                        if (active) {
+                                            Modifier
+                                                .graphicsLayer { translationX = tx }
+                                                .zIndex(1f)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
                                     .then(if (dragId != null) Modifier.animateItem() else Modifier),
                             ) {
                                 ChannelModule(
