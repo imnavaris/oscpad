@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 private val Ease = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
 @Composable
-fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit, diameter: Dp = 120.dp) {
+fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit, label: String, diameter: Dp = 120.dp) {
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -70,8 +70,9 @@ fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit, diameter: Dp = 120.d
             )
         }
         Text(
-            text = if (on) "Sí" else "No",
+            text = label,
             style = MaterialTheme.typography.titleMedium,
+            fontFamily = Mono,
             color = lerp(colors.onSurfaceVariant, colors.background, fill),
         )
     }

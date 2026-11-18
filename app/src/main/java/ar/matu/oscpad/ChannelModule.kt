@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
@@ -118,6 +119,7 @@ fun ChannelModule(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Spacer(Modifier.size(28.dp))
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -132,7 +134,7 @@ fun ChannelModule(
                             onDragCancel = { onTitleDragEnd() },
                         )
                     },
-                contentAlignment = Alignment.CenterStart,
+                contentAlignment = Alignment.Center,
             ) {
                 if (editing) {
                     OutlinedTextField(
@@ -146,7 +148,9 @@ fun ChannelModule(
                             .focusRequester(focusRequester),
                         singleLine = true,
                         isError = !nameOk,
-                        textStyle = MaterialTheme.typography.titleLarge,
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
+                            textAlign = TextAlign.Center,
+                        ),
                         shape = RoundedCornerShape(8.dp),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
@@ -209,6 +213,7 @@ fun ChannelModule(
                         onDone(next)
                         onSend(next.address(), next.current())
                     },
+                    label = formatValue(channel.current()),
                     diameter = 120.dp,
                 )
             }

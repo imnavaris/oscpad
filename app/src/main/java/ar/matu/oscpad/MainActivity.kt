@@ -292,7 +292,7 @@ private fun App() {
                                     .onSizeChanged { if (it.width > 0) cellWpx = it.width.toFloat() }
                                     .graphicsLayer { translationX = tx }
                                     .zIndex(if (active) 1f else 0f)
-                                    .animateItem(),
+                                    .then(if (dragId != null) Modifier.animateItem() else Modifier),
                             ) {
                                 ChannelModule(
                                     channel = channel,
