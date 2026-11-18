@@ -50,11 +50,11 @@ fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
 
 private fun sensorHint(kind: String) = when (kind) {
     "gyroscope" -> "Velocidad de giro por eje"
-    "magnetic_field" -> "Campo magnetico (brujula)"
+    "magnetic_field" -> "Campo magnético (brújula)"
     "light" -> "Luz ambiente (lux)"
     "proximity" -> "Cerca o lejos (cm)"
-    "pressure" -> "Presion atmosferica (hPa)"
-    else -> "Inclinacion y movimiento del celu"
+    "pressure" -> "Presión atmosférica (hPa)"
+    else -> "Inclinación y movimiento del celu"
 }
 
 private val types = listOf(
@@ -274,13 +274,13 @@ fun ChannelModule(
                         sensors.chunked(3).forEach { row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.Center,
                             ) {
                                 row.forEach { s ->
                                     val selected = s.kind == channel.sensorKind
                                     Column(
                                         modifier = Modifier
-                                            .weight(1f)
+                                            .width(96.dp)
                                             .clickable {
                                                 onDone(
                                                     channel.copy(
@@ -311,9 +311,6 @@ fun ChannelModule(
                                             },
                                         )
                                     }
-                                }
-                                repeat(3 - row.size) {
-                                    Spacer(Modifier.weight(1f))
                                 }
                             }
                         }
