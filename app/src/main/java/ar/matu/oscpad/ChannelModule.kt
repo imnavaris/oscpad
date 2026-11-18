@@ -100,7 +100,7 @@ fun ChannelModule(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 16.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
