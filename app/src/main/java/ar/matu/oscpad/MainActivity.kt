@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -39,11 +41,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 private val OscScheme = darkColorScheme(
     primary = Color(0xFFFBBF24),
@@ -141,6 +146,10 @@ private fun App() {
                 Controls(
                     fader = fader,
                     toggle = toggle,
+                    addrFader = config.addrFader,
+                    addrButton = config.addrButton,
+                    scaledFader = scaled(fader),
+                    lastButton = if (toggle) 1f else 0f,
                     onFader = { level ->
                         fader = level
                         if (throttle.shouldSend()) send(config.addrFader, scaled(level))
@@ -150,6 +159,7 @@ private fun App() {
                         toggle = state
                         send(config.addrButton, if (state) 1f else 0f)
                     },
+                    onAddressTap = { settingsOpen = true },
                 )
             }
 
@@ -207,31 +217,78 @@ private fun App() {
 private fun Controls(
     fader: Float,
     toggle: Boolean,
+    addrFader: String,
+    addrButton: String,
+    scaledFader: Float,
+    lastButton: Float,
     onFader: (Float) -> Unit,
     onRelease: () -> Unit,
     onToggle: (Boolean) -> Unit,
+    onAddressTap: () -> Unit,
 ) {
-    Row(
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(40.dp),
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Label("Fader")
-            Spacer(Modifier.height(14.dp))
-            Fader(value = fader, onChange = onFader, onRelease = onRelease)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            Label("Fader", Modifier.width(96.dp))
+            Label("Boton", Modifier.width(120.dp))
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Label("Boton")
-            Spacer(Modifier.height(14.dp))
-            ToggleControl(on = toggle, onToggle = onToggle)
+        Spacer(Modifier.height(14.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(40.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(96.dp),
+            ) {
+                Fader(value = fader, onChange = onFader, onRelease = onRelease)
+                Spacer(Modifier.height(10.dp))
+                Readout(
+                    address = addrFader,
+                    value = "%.2f".format(Locale.US, scaledFader),
+                    onTap = onAddressTap,
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(120.dp),
+            ) {
+                ToggleControl(on = toggle, onToggle = onToggle)
+                Spacer(Modifier.height(10.dp))
+                Readout(
+                    address = addrButton,
+                    value = "%.1f".format(Locale.US, lastButton),
+                    onTap = onAddressTap,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun Label(text: String) {
+private fun Readout(address: String, value: String, onTap: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = address,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable(onClick = onTap),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun Label(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
+        modifier = modifier,
+        textAlign = TextAlign.Center,
         style = MaterialTheme.typography.labelSmall,
         letterSpacing = 1.5.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
