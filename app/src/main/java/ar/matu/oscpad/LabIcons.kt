@@ -3,6 +3,7 @@ package ar.matu.oscpad
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -259,6 +260,37 @@ object LabIcons {
                     style = Stroke(w, cap = StrokeCap.Round),
                 )
             }
+        }
+    }
+
+    @Composable
+    fun Stack(tint: Color, modifier: Modifier = Modifier) {
+        Canvas(modifier) {
+            val w = 2.dp.toPx()
+            val s = size.minDimension * 0.52f
+            val o = size.minDimension * 0.15f
+            val cr = CornerRadius(size.minDimension * 0.08f)
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(o * 2, 0f),
+                size = Size(s, s),
+                cornerRadius = cr,
+                style = Stroke(w),
+            )
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(o, o),
+                size = Size(s, s),
+                cornerRadius = cr,
+                style = Stroke(w),
+            )
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(0f, o * 2),
+                size = Size(s, s),
+                cornerRadius = cr,
+                style = Stroke(w),
+            )
         }
     }
 

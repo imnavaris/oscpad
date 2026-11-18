@@ -98,6 +98,7 @@ private fun App() {
     var presets by remember { mutableStateOf(PresetStore.load(context)) }
     var activePresetId by remember { mutableStateOf<Long?>(null) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var presetsOpen by remember { mutableStateOf(false) }
     var connOk by remember { mutableStateOf(true) }
     var connAt by remember { mutableStateOf(0L) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -271,7 +272,23 @@ private fun App() {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    IconButton(onClick = { settingsOpen = !settingsOpen }) {
+                    IconButton(onClick = {
+                        presetsOpen = !presetsOpen
+                        if (presetsOpen) settingsOpen = false
+                    }) {
+                        LabIcons.Stack(
+                            tint = if (presetsOpen) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    IconButton(onClick = {
+                        settingsOpen = !settingsOpen
+                        if (settingsOpen) presetsOpen = false
+                    }) {
                         LabIcons.Gear(
                             tint = if (settingsOpen) {
                                 MaterialTheme.colorScheme.primary
@@ -284,7 +301,7 @@ private fun App() {
                 }
             }
 
-            if (settingsOpen) {
+            if (settingsOpen || presetsOpen) {
                 Spacer(Modifier.height(16.dp))
                 val reveal = remember { Animatable(0f) }
                 LaunchedEffect(reveal) {
@@ -296,37 +313,37 @@ private fun App() {
                         translationY = (1f - reveal.value) * 12.dp.toPx()
                     },
                 ) {
-                    PresetsPanel(
-                        presets = presets,
-                        activeId = activePresetId,
-                        onSelect = { preset ->
-                            channels = preset.channels
-                            net = preset.net
-                            ChannelStore.save(context, preset.channels)
-                            NetStore.save(context, preset.net)
-                            activePresetId = preset.id
-                        },
-                        onSaveCurrent = { name ->
-                            val preset = Preset(
-                                id = PresetStore.nextPresetId(context),
-                                name = name.trim(),
-                                channels = channels,
-                                net = net,
-                            )
-                            val updated = presets + preset
-                            presets = updated
-                            PresetStore.save(context, updated)
-                            activePresetId = preset.id
-                        },
-                        onDelete = { id ->
-                            val updated = presets.filter { it.id != id }
-                            presets = updated
-                            PresetStore.save(context, updated)
-                            if (activePresetId == id) activePresetId = null
-                        },
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    if (presetsOpen) {
+                        PresetsPanel(
+                            presets = presets,
+                            activeId = activePresetId,
+                            onSelect = { preset ->
+                                channels = preset.channels
+                                net = preset.net
+                                ChannelStore.save(context, preset.channels)
+                                NetStore.save(context, preset.net)
+                                activePresetId = preset.id
+                            },
+                            onSaveCurrent = { name ->
+                                val preset = Preset(
+                                    id = PresetStore.nextPresetId(context),
+                                    name = name.trim(),
+                                    channels = channels,
+                                    net = net,
+                                )
+                                val updated = presets + preset
+                                presets = updated
+                                PresetStore.save(context, updated)
+                                activePresetId = preset.id
+                            },
+                            onDelete = { id ->
+                                val updated = presets.filter { it.id != id }
+                                presets = updated
+                                PresetStore.save(context, updated)
+                                if (activePresetId == id) activePresetId = null
+                            },
+                        )
+                    } else {
                         SettingsPanel(
                             net = net,
                             localIp = remember { localIpv4() ?: "?" },

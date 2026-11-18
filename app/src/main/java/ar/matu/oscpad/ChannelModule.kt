@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -50,6 +48,15 @@ import java.util.Locale
 
 fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
 
+private fun sensorHint(kind: String) = when (kind) {
+    "gyroscope" -> "Velocidad de giro por eje"
+    "magnetic_field" -> "Campo magnetico (brujula)"
+    "light" -> "Luz ambiente (lux)"
+    "proximity" -> "Cerca o lejos (cm)"
+    "pressure" -> "Presion atmosferica (hPa)"
+    else -> "Inclinacion y movimiento del celu"
+}
+
 private val types = listOf(
     "fader" to "Fader",
     "button" to "Botón",
@@ -73,6 +80,8 @@ fun ChannelModule(
     var name by remember(channel.id) { mutableStateOf(channel.name) }
     var minText by remember(channel.id) { mutableStateOf(channel.min.toString()) }
     var maxText by remember(channel.id) { mutableStateOf(channel.max.toString()) }
+    var min2Text by remember(channel.id) { mutableStateOf(channel.min2.toString()) }
+    var max2Text by remember(channel.id) { mutableStateOf(channel.max2.toString()) }
     var onText by remember(channel.id) { mutableStateOf(channel.onValue.toString()) }
     var offText by remember(channel.id) { mutableStateOf(channel.offValue.toString()) }
     var rateText by remember(channel.id) { mutableStateOf(channel.rateMs.toString()) }
@@ -88,15 +97,18 @@ fun ChannelModule(
     val clean = sanitizeName(name)
     val minValue = minText.toFloatOrNull()
     val maxValue = maxText.toFloatOrNull()
+    val min2Value = min2Text.toFloatOrNull()
+    val max2Value = max2Text.toFloatOrNull()
     val onValue = onText.toFloatOrNull()
     val offValue = offText.toFloatOrNull()
     val rateValue = rateText.toLongOrNull()
     val nameOk = clean != null && clean !in taken
     val minOk = minValue != null && (maxValue == null || minValue < maxValue)
     val maxOk = maxValue != null && (minValue == null || minValue < maxValue)
+    val min2Ok = min2Value != null && (max2Value == null || min2Value < max2Value)
+    val max2Ok = max2Value != null && (min2Value == null || min2Value < max2Value)
     val binaryOk = onValue != null && offValue != null
     val rateOk = rateValue != null && rateValue >= 16L
-    val range = channel.max - channel.min
 
     fun pushName() {
         val c = sanitizeName(name) ?: return
@@ -110,6 +122,13 @@ fun ChannelModule(
         val mx = maxText.toFloatOrNull() ?: return
         if (mn >= mx) return
         onDone(channel.copy(min = mn, max = mx))
+    }
+
+    fun pushRangeY() {
+        val mn = min2Text.toFloatOrNull() ?: return
+        val mx = max2Text.toFloatOrNull() ?: return
+        if (mn >= mx) return
+        onDone(channel.copy(min2 = mn, max2 = mx))
     }
 
     fun pushBinary() {
@@ -230,13 +249,7 @@ fun ChannelModule(
                         val next = channel.copy(level = x, level2 = y)
                         onLive(next)
                         if (throttle.shouldSend()) {
-                            onSendMany(
-                                next.address(),
-                                floatArrayOf(
-                                    next.min + (next.max - next.min) * x,
-                                    next.min + (next.max - next.min) * y,
-                                ),
-                            )
+                            onSendMany(next.address(), next.xyValues())
                         }
                     },
                     onRelease = { onDone(channel) },
@@ -252,6 +265,12 @@ fun ChannelModule(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        Text(
+                            text = sensorHint(channel.sensorKind),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        )
                         sensors.chunked(3).forEach { row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -301,7 +320,7 @@ fun ChannelModule(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             (spec?.axes ?: emptyList()).forEach { axis ->
                                 TypeChip(
-                                    label = axis,
+                                    label = axis.replaceFirstChar { it.uppercase() },
                                     selected = axis == channel.sensorAxis,
                                     modifier = Modifier.weight(1f),
                                     onClick = { onDone(channel.copy(sensorAxis = axis)) },
@@ -331,55 +350,79 @@ fun ChannelModule(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(120.dp)
-                                .background(Color(r, g, b), RoundedCornerShape(16.dp))
+                                .size(140.dp)
+                                .background(Color(r, g, b), RoundedCornerShape(20.dp))
                                 .border(
                                     BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                                    RoundedCornerShape(16.dp),
+                                    RoundedCornerShape(20.dp),
                                 ),
                         )
                         Spacer(Modifier.height(8.dp))
                         ColorSlider(
-                            label = "R",
-                            value = r,
                             tint = Color(0xFFFF5252),
+                            value = r,
                             onChange = { push(channel.copy(level = it)) },
                             onDone = { onDone(channel) },
                         )
                         ColorSlider(
-                            label = "G",
-                            value = g,
                             tint = MaterialTheme.colorScheme.primary,
+                            value = g,
                             onChange = { push(channel.copy(level2 = it)) },
                             onDone = { onDone(channel) },
                         )
                         ColorSlider(
-                            label = "B",
-                            value = b,
                             tint = Color(0xFF5AA9FF),
+                            value = b,
                             onChange = { push(channel.copy(level3 = it)) },
                             onDone = { onDone(channel) },
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            listOf(
+                                Triple("R", r, Color(0xFFFF5252)),
+                                Triple("G", g, MaterialTheme.colorScheme.primary),
+                                Triple("B", b, Color(0xFF5AA9FF)),
+                            ).forEach { (letter, v, tint) ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = letter,
+                                        style = MaterialTheme.typography.displaySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = tint,
+                                    )
+                                    Text(
+                                        text = formatValue(v),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontFamily = Mono,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text(
-            text = when (type) {
-                "xy" -> "${formatValue(channel.min + range * channel.level)}  " +
-                    formatValue(channel.min + range * channel.level2)
-                "color" -> "${formatValue(channel.level)}  " +
-                    "${formatValue(channel.level2)}  ${formatValue(channel.level3)}"
-                "sensor" -> formatValue(channel.level)
-                else -> formatValue(channel.current())
-            },
-            style = MaterialTheme.typography.displaySmall,
-            fontFamily = Mono,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        )
-        Spacer(Modifier.height(4.dp))
+        if (type != "color") {
+            Text(
+                text = when (type) {
+                    "xy" -> channel.xyValues().let {
+                        "${formatValue(it[0])}  ${formatValue(it[1])}"
+                    }
+                    "sensor" -> formatValue(channel.level)
+                    else -> formatValue(channel.current())
+                },
+                style = MaterialTheme.typography.displaySmall,
+                fontFamily = Mono,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         Text(
             text = channel.address(),
             style = MaterialTheme.typography.labelMedium,
@@ -389,7 +432,7 @@ fun ChannelModule(
         )
         Spacer(Modifier.height(12.dp))
         when (type) {
-            "fader", "xy" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            "fader" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Field(
                     label = "Mín.",
                     value = minText,
@@ -412,6 +455,57 @@ fun ChannelModule(
                         pushRange()
                     },
                 )
+            }
+
+            "xy" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(
+                        label = "Mín. X",
+                        value = minText,
+                        isError = !minOk,
+                        modifier = Modifier.weight(1f),
+                        numeric = true,
+                        onChange = {
+                            minText = it
+                            pushRange()
+                        },
+                    )
+                    Field(
+                        label = "Máx. X",
+                        value = maxText,
+                        isError = !maxOk,
+                        modifier = Modifier.weight(1f),
+                        numeric = true,
+                        onChange = {
+                            maxText = it
+                            pushRange()
+                        },
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(
+                        label = "Mín. Y",
+                        value = min2Text,
+                        isError = !min2Ok,
+                        modifier = Modifier.weight(1f),
+                        numeric = true,
+                        onChange = {
+                            min2Text = it
+                            pushRangeY()
+                        },
+                    )
+                    Field(
+                        label = "Máx. Y",
+                        value = max2Text,
+                        isError = !max2Ok,
+                        modifier = Modifier.weight(1f),
+                        numeric = true,
+                        onChange = {
+                            max2Text = it
+                            pushRangeY()
+                        },
+                    )
+                }
             }
 
             "button" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -454,16 +548,12 @@ fun ChannelModule(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             types.forEach { (key, label) ->
                 TypeChip(
                     label = label,
                     selected = type == key,
+                    modifier = Modifier.weight(1f),
                     onClick = { onDone(channel.copy(type = key)) },
                 )
             }
@@ -487,43 +577,22 @@ private fun SensorGlyph(kind: String, tint: Color) {
 
 @Composable
 private fun ColorSlider(
-    label: String,
-    value: Float,
     tint: Color,
+    value: Float,
     onChange: (Float) -> Unit,
     onDone: () -> Unit,
 ) {
-    Row(
+    Slider(
+        value = value.coerceIn(0f, 1f),
+        onValueChange = onChange,
+        onValueChangeFinished = onDone,
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(32.dp),
-        )
-        Text(
-            text = formatValue(value),
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = Mono,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(56.dp),
-        )
-        Slider(
-            value = value.coerceIn(0f, 1f),
-            onValueChange = onChange,
-            onValueChangeFinished = onDone,
-            modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(
-                thumbColor = tint,
-                activeTrackColor = tint.copy(alpha = 0.55f),
-                inactiveTrackColor = MaterialTheme.colorScheme.outline,
-            ),
-        )
-    }
+        colors = SliderDefaults.colors(
+            thumbColor = tint,
+            activeTrackColor = tint.copy(alpha = 0.55f),
+            inactiveTrackColor = MaterialTheme.colorScheme.outline,
+        ),
+    )
 }
 
 @Composable
@@ -533,38 +602,35 @@ private fun TypeChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        },
-        border = BorderStroke(
-            1.dp,
-            if (selected) {
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) {
                 MaterialTheme.colorScheme.primary
             } else {
-                MaterialTheme.colorScheme.outline
+                MaterialTheme.colorScheme.onSurfaceVariant
             },
-        ),
-    ) {
+        )
+        Spacer(Modifier.height(4.dp))
         Box(
             modifier = Modifier
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
+                .width(24.dp)
+                .height(2.dp)
+                .background(
+                    if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        Color.Transparent
+                    },
+                    RoundedCornerShape(1.dp),
+                ),
+        )
     }
 }

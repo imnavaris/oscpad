@@ -44,6 +44,8 @@ data class Channel(
     val on: Boolean = false,
     val level2: Float = 0.5f,
     val level3: Float = 0.5f,
+    val min2: Float = 0f,
+    val max2: Float = 1f,
     val sensorKind: String = "accelerometer",
     val sensorAxis: String = "x",
     val rateMs: Long = 50,
@@ -58,6 +60,11 @@ data class Preset(
 )
 
 private val json = Json { ignoreUnknownKeys = true }
+
+fun Channel.xyValues(x: Float = level, y: Float = level2) = floatArrayOf(
+    min + (max - min) * x,
+    min2 + (max2 - min2) * y,
+)
 
 fun Channel.address() = "/$name"
 

@@ -36,6 +36,14 @@ class ChannelTest {
     }
 
     @Test
+    fun xyValuesMapEachAxisToItsRange() {
+        val channel = Channel(id = 1, name = "pad", type = "xy", min = 0f, max = 10f, min2 = 100f, max2 = 200f)
+        val mapped = channel.xyValues(0.5f, 0.25f)
+        assertEquals(5f, mapped[0], 0.001f)
+        assertEquals(125f, mapped[1], 0.001f)
+    }
+
+    @Test
     fun sanitizeNameReplacesWhitespaceAndRejectsEmpty() {
         assertEquals("mis_luces", sanitizeName("mis luces"))
         assertEquals("abc", sanitizeName("  abc  "))
