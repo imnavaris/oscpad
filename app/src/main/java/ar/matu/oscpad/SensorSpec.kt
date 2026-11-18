@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import kotlin.math.log10
 import kotlin.math.sqrt
 
 data class SensorSpec(
@@ -65,15 +66,45 @@ class SensorFeed(
         val now = System.currentTimeMillis()
         if (now - lastMs < rateMs.coerceAtLeast(16L)) return
         lastMs = now
-        val v = event.values
-        val value = when (axis) {
-            "y" -> v.getOrElse(1) { 0f }
-            "z" -> v.getOrElse(2) { 0f }
-            "magnitud" -> sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-            else -> v.getOrElse(0) { 0f }
-        }
-        onValue(value)
+        onValue(normalizeSensor(kind, axis, event.values, sensor?.maximumRange ?: 0f))
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+}
+
+fun normalizeSensor(kind: String, axis: String, v: FloatArray, maxRange: Float): Float {
+    fun raw(): Float = when (axis) {
+        "y" -> v.getOrElse(1) { 0f }
+        "z" -> v.getOrElse(2) { 0f }
+        "magnitud" -> sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+        else -> v.getOrElse(0) { 0f }
+    }
+    val r = raw()
+    return when (kind) {
+        "accelerometer" -> if (axis == "magnitud") {
+            (r / 19.6f).coerceIn(0f, 1f)
+        } else {
+            ((r / 19.6f).coerceIn(-1f, 1f) + 1f) / 2f
+        }
+        "gyroscope" -> if (axis == "magnitud") {
+            (r / 8.7f).coerceIn(0f, 1f)
+        } else {
+            ((r / 8.7f).coerceIn(-1f, 1f) + 1f) / 2f
+        }
+        "magnetic_field" -> if (axis == "magnitud") {
+            (r / 100f).coerceIn(0f, 1f)
+        } else {
+            ((r / 100f).coerceIn(-1f, 1f) + 1f) / 2f
+        }
+        "light" -> (log10(1f + r) / log10(40001f)).coerceIn(0f, 1f)
+        "proximity" -> if (maxRange > 0f) {
+            (r / maxRange).coerceIn(0f, 1f)
+        } else if (r > 0f) {
+            1f
+        } else {
+            0f
+        }
+        "pressure" -> ((r - 300f) / 800f).coerceIn(0f, 1f)
+        else -> r.coerceIn(0f, 1f)
+    }
 }

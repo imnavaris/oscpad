@@ -13,10 +13,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -37,25 +40,29 @@ fun ToggleControl(
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val latestOn by rememberUpdatedState(on)
+    val latestToggle by rememberUpdatedState(onToggle)
+    val latestDown by rememberUpdatedState(onDown)
+    val latestUp by rememberUpdatedState(onUp)
     val active = if (hold) on else pressed
 
     Box(
         modifier = Modifier
             .size(diameter)
-            .pointerInput(hold, on) {
+            .pointerInput(hold) {
                 detectTapGestures(
                     onPress = {
                         val press = PressInteraction.Press(it)
                         interaction.emit(press)
                         try {
-                            if (!hold) onDown()
+                            if (!hold) latestDown()
                             awaitRelease()
                         } finally {
-                            if (!hold) onUp()
+                            if (!hold) latestUp()
                             interaction.emit(PressInteraction.Release(press))
                         }
                     },
-                    onTap = { if (hold) onToggle(!on) },
+                    onTap = { if (hold) latestToggle(!latestOn) },
                 )
             },
         contentAlignment = Alignment.Center,
@@ -63,36 +70,38 @@ fun ToggleControl(
         Canvas(Modifier.fillMaxSize()) {
             val r = size.minDimension / 2
             drawCircle(color = colors.outline, radius = r)
-            drawCircle(color = colors.background, radius = r - 2.dp.toPx())
-            val capR = r - 11.dp.toPx()
-            val push = if (active) 4.dp.toPx() else 0f
+            drawCircle(color = colors.background, radius = r - 3.dp.toPx())
+            val capR = r - 12.dp.toPx()
+            val push = if (active) 5.dp.toPx() else 0f
             val capC = center + Offset(0f, push)
             drawCircle(
-                color = colors.outlineVariant,
+                color = Color.Black.copy(alpha = 0.5f),
                 radius = capR,
-                center = capC + Offset(0f, 3.dp.toPx()),
+                center = center + Offset(0f, 7.dp.toPx()),
             )
             drawCircle(
                 color = if (active) colors.primary else colors.surfaceVariant,
                 radius = capR,
                 center = capC,
-                style = Stroke(1.5.dp.toPx()),
             )
-            if (active) {
-                drawCircle(color = colors.primary.copy(alpha = 0.25f), radius = capR, center = capC)
-            }
-            drawArc(
+            drawCircle(
                 color = if (active) {
-                    colors.onPrimary.copy(alpha = 0.6f)
+                    colors.primary.copy(alpha = 0.5f)
                 } else {
-                    colors.onSurfaceVariant.copy(alpha = 0.4f)
+                    colors.outline
                 },
+                radius = capR,
+                center = capC,
+                style = Stroke(2.dp.toPx()),
+            )
+            drawArc(
+                color = Color.White.copy(alpha = if (active) 0.35f else 0.15f),
                 startAngle = 200f,
-                sweepAngle = 140f,
+                sweepAngle = 100f,
                 useCenter = false,
                 topLeft = Offset(capC.x - capR, capC.y - capR),
                 size = Size(capR * 2, capR * 2),
-                style = Stroke(1.5.dp.toPx()),
+                style = Stroke(2.dp.toPx(), cap = StrokeCap.Round),
             )
         }
         Text(

@@ -50,9 +50,16 @@ import java.util.Locale
 fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
 
 fun channelValueText(channel: Channel) = when (channel.type) {
-    "xy" -> channel.xyValues().let { "${formatValue(it[0])}  ${formatValue(it[1])}" }
+    "xy" -> channel.xyValues().let { "X ${formatValue(it[0])}  Y ${formatValue(it[1])}" }
     "sensor" -> formatValue(channel.level)
     else -> formatValue(channel.current())
+}
+
+private fun axisGloss(kind: String) = when (kind) {
+    "accelerometer" -> "x: inclinar costados · y: inclinar frente · magnitud: sacudida"
+    "gyroscope" -> "x/y/z: giro por eje · magnitud: giro total"
+    "magnetic_field" -> "x/y/z: campo por eje · magnitud: intensidad"
+    else -> ""
 }
 
 private fun sensorHint(kind: String) = when (kind) {
@@ -261,23 +268,6 @@ fun ChannelModule(
                         },
                         diameter = 120.dp,
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = "Mantener apretado",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Switch(
-                            checked = channel.hold,
-                            onCheckedChange = { onDone(channel.copy(hold = it)) },
-                        )
-                    }
                 }
 
                 "xy" -> XyPad(
@@ -363,6 +353,15 @@ fun ChannelModule(
                                     )
                                 }
                             }
+                            val gloss = axisGloss(channel.sensorKind)
+                            if (gloss.isNotEmpty()) {
+                                Text(
+                                    text = gloss,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                                )
+                            }
                         }
                     }
                 }
@@ -444,7 +443,34 @@ fun ChannelModule(
             }
         }
         Spacer(Modifier.height(16.dp))
-        if (type != "color") {
+        if (type == "xy") {
+            Row(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val v = channel.xyValues()
+                listOf("X" to v[0], "Y" to v[1]).forEach { (letter, value) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = letter,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = Mono,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = formatValue(value),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontFamily = Mono,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        } else if (type != "color") {
             Text(
                 text = channelValueText(channel),
                 style = MaterialTheme.typography.displaySmall,
@@ -461,6 +487,25 @@ fun ChannelModule(
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
+        if (type == "button") {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = "Mantener apretado",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = channel.hold,
+                    onCheckedChange = { onDone(channel.copy(hold = it)) },
+                )
+            }
+        }
         Spacer(Modifier.height(12.dp))
         when (type) {
             "fader" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

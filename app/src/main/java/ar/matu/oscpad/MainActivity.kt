@@ -221,9 +221,9 @@ private fun App() {
         wanted.forEach { (id, key) ->
             if (feeds[id] != null) return@forEach
             val channel = channelsState.value.first { it.id == id }
-            val feed = SensorFeed(context, key.first, key.second, key.third) { raw ->
+            val feed = SensorFeed(context, key.first, key.second, key.third) { norm ->
                 channelsState.value.find { it.id == id }?.let { ch ->
-                    val v = raw.coerceIn(ch.min, ch.max)
+                    val v = ch.min + (ch.max - ch.min) * norm.coerceIn(0f, 1f)
                     live(ch.copy(level = v))
                     send(ch.address(), v)
                 }
@@ -265,14 +265,12 @@ private fun App() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .safeDrawingPadding()
-                .imePadding()
-                .padding(vertical = 16.dp),
+                .safeDrawingPadding(),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -305,7 +303,13 @@ private fun App() {
                 }
             }
 
-            when (tab) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .imePadding(),
+            ) {
+                when (tab) {
                 2 -> {
                     PresetsPanel(
                             presets = presets,
@@ -362,9 +366,7 @@ private fun App() {
                     0 -> {
                         if (channels.isEmpty()) {
                             Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
+                                modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -376,7 +378,7 @@ private fun App() {
                         } else {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(2),
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -417,7 +419,8 @@ private fun App() {
                             }
                         }
                     }
-                    else -> if (channels.isEmpty()) {
+                    else -> Column(modifier = Modifier.fillMaxSize()) {
+                        if (channels.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -497,6 +500,8 @@ private fun App() {
                     )
                 }
                 }
+                    }
+            }
             }
 
             SnackbarHost(hostState = snackbarHostState) { data ->

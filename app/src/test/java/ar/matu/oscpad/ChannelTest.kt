@@ -41,6 +41,19 @@ class ChannelTest {
     }
 
     @Test
+    fun normalizeAccelerometerCentersFlatAtHalf() {
+        assertEquals(0.5f, normalizeSensor("accelerometer", "x", floatArrayOf(0f, 0f, 0f), 0f), 0.001f)
+        assertEquals(1f, normalizeSensor("accelerometer", "x", floatArrayOf(19.6f, 0f, 0f), 0f), 0.001f)
+        assertEquals(0f, normalizeSensor("accelerometer", "x", floatArrayOf(-19.6f, 0f, 0f), 0f), 0.001f)
+    }
+
+    @Test
+    fun normalizeLightUsesLogScale() {
+        assertEquals(0f, normalizeSensor("light", "valor", floatArrayOf(0f), 40000f), 0.01f)
+        assertEquals(1f, normalizeSensor("light", "valor", floatArrayOf(40000f), 40000f), 0.01f)
+    }
+
+    @Test
     fun xyValuesMapEachAxisToItsRange() {
         val channel = Channel(id = 1, name = "pad", type = "xy", min = 0f, max = 10f, min2 = 100f, max2 = 200f)
         val mapped = channel.xyValues(0.5f, 0.25f)
