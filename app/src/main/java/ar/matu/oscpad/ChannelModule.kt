@@ -49,6 +49,19 @@ import java.util.Locale
 
 fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
 
+fun typeLabel(type: String) = when (type) {
+    "fader" -> "Fader"
+    "button" -> "Botón"
+    "xy" -> "XY"
+    "sensor" -> "Sensor"
+    "color" -> "Color"
+    else -> type
+}
+
+fun cleanIntInput(raw: String) = raw.filter { it.isDigit() }
+
+fun cleanFloatInput(raw: String) = raw.filter { it.isDigit() || it == '.' || it == '-' }
+
 fun channelValueText(channel: Channel) = when (channel.type) {
     "xy" -> channel.xyValues().let { "X ${formatValue(it[0])}  Y ${formatValue(it[1])}" }
     "sensor" -> formatValue(channel.level)
@@ -516,7 +529,7 @@ fun ChannelModule(
                     modifier = Modifier.weight(1f),
                     numeric = true,
                     onChange = {
-                        minText = it
+                        minText = cleanFloatInput(it)
                         pushRange()
                     },
                 )
@@ -527,7 +540,7 @@ fun ChannelModule(
                     modifier = Modifier.weight(1f),
                     numeric = true,
                     onChange = {
-                        maxText = it
+                        maxText = cleanFloatInput(it)
                         pushRange()
                     },
                 )
@@ -566,7 +579,7 @@ fun ChannelModule(
                         modifier = Modifier.weight(1f),
                         numeric = true,
                         onChange = {
-                            min2Text = it
+                            min2Text = cleanFloatInput(it)
                             pushRangeY()
                         },
                     )
@@ -577,7 +590,7 @@ fun ChannelModule(
                         modifier = Modifier.weight(1f),
                         numeric = true,
                         onChange = {
-                            max2Text = it
+                            max2Text = cleanFloatInput(it)
                             pushRangeY()
                         },
                     )
@@ -592,7 +605,7 @@ fun ChannelModule(
                     modifier = Modifier.weight(1f),
                     numeric = true,
                     onChange = {
-                        onText = it
+                        onText = cleanFloatInput(it)
                         pushBinary()
                     },
                 )
@@ -603,7 +616,7 @@ fun ChannelModule(
                     modifier = Modifier.weight(1f),
                     numeric = true,
                     onChange = {
-                        offText = it
+                        offText = cleanFloatInput(it)
                         pushBinary()
                     },
                 )
@@ -617,7 +630,7 @@ fun ChannelModule(
                     modifier = Modifier.weight(1f),
                     numeric = true,
                     onChange = {
-                        rateText = it
+                        rateText = cleanIntInput(it)
                         pushRate()
                     },
                 )
@@ -669,6 +682,26 @@ private fun ColorSlider(
             inactiveTrackColor = MaterialTheme.colorScheme.outline,
         ),
     )
+}
+
+@Composable
+fun OverviewXyRow(letter: String, value: Float) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = letter,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            fontFamily = Mono,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = formatValue(value),
+            style = MaterialTheme.typography.headlineSmall,
+            fontFamily = Mono,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable

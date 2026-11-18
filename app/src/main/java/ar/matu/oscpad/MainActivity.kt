@@ -145,7 +145,6 @@ private fun App() {
         val updated = replace(channels, next)
         channels = updated
         ChannelStore.save(context, updated)
-        activePresetId = null
     }
 
     fun remove(id: Long) {
@@ -155,7 +154,6 @@ private fun App() {
         val updated = channels.filter { it.id != id }
         channels = updated
         ChannelStore.save(context, updated)
-        activePresetId = null
         scope.launch {
             launch {
                 delay(5000)
@@ -202,7 +200,6 @@ private fun App() {
         val updated = channels + Channel(id = id, name = "canal$id")
         channels = updated
         ChannelStore.save(context, updated)
-        activePresetId = null
         scope.launch {
             listState.animateScrollToItem((updated.size - 1) * 2)
         }
@@ -310,8 +307,8 @@ private fun App() {
                     .imePadding(),
             ) {
                 when (tab) {
-                2 -> {
-                    PresetsPanel(
+                    2 -> {
+                        PresetsPanel(
                             presets = presets,
                             activeId = activePresetId,
                             onSelect = { preset ->
@@ -321,14 +318,23 @@ private fun App() {
                                 NetStore.save(context, preset.net)
                                 activePresetId = preset.id
                             },
-                            onSaveCurrent = { name ->
+                            onDeselect = { activePresetId = null },
+                            onSaveNew = { name ->
                                 val preset = Preset(
                                     id = PresetStore.nextPresetId(context),
-                                    name = name.trim(),
+                                    name = name,
                                     channels = channels,
                                     net = net,
                                 )
                                 val updated = presets + preset
+                                presets = updated
+                                PresetStore.save(context, updated)
+                                activePresetId = preset.id
+                            },
+                            onOverwrite = { preset ->
+                                val updated = presets.map { p ->
+                                    if (p.id == preset.id) p.copy(channels = channels, net = net) else p
+                                }
                                 presets = updated
                                 PresetStore.save(context, updated)
                                 activePresetId = preset.id
@@ -338,6 +344,17 @@ private fun App() {
                                 presets = updated
                                 PresetStore.save(context, updated)
                                 if (activePresetId == id) activePresetId = null
+                            },
+                            onRename = { id, name ->
+                                val updated = presets.map { p ->
+                                    if (p.id == id) p.copy(name = name) else p
+                                }
+                                presets = updated
+                                PresetStore.save(context, updated)
+                            },
+                            onGoChannels = {
+                                selectTab(1)
+                                if (channels.isEmpty()) addChannel()
                             },
                         )
                     }
@@ -350,10 +367,18 @@ private fun App() {
                             onChange = {
                                 net = it
                                 NetStore.save(context, it)
-                                activePresetId = null
                             },
                             onTestAll = {
-                                channels.forEach { send(it.address(), it.current()) }
+                                channels.forEach {
+                                    when (it.type) {
+                                        "xy" -> sendMany(it.address(), it.xyValues())
+                                        "color" -> sendMany(
+                                            it.address(),
+                                            floatArrayOf(it.level, it.level2, it.level3),
+                                        )
+                                        else -> send(it.address(), it.current())
+                                    }
+                                }
                             },
                             onClearAll = {
                                 channels = emptyList()
@@ -400,13 +425,24 @@ private fun App() {
                                             fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurface,
                                         )
-                                        Spacer(Modifier.height(4.dp))
                                         Text(
-                                            text = channelValueText(channel),
-                                            style = MaterialTheme.typography.headlineSmall,
-                                            fontFamily = Mono,
-                                            color = MaterialTheme.colorScheme.onSurface,
+                                            text = typeLabel(channel.type),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
+                                        Spacer(Modifier.height(4.dp))
+                                        if (channel.type == "xy") {
+                                            val v = channel.xyValues()
+                                            OverviewXyRow("X", v[0])
+                                            OverviewXyRow("Y", v[1])
+                                        } else {
+                                            Text(
+                                                text = channelValueText(channel),
+                                                style = MaterialTheme.typography.headlineSmall,
+                                                fontFamily = Mono,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            )
+                                        }
                                         Spacer(Modifier.height(2.dp))
                                         Text(
                                             text = channel.address(),

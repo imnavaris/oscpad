@@ -54,6 +54,20 @@ class ChannelTest {
     }
 
     @Test
+    fun cleanIntInputKeepsOnlyDigits() {
+        assertEquals("50", cleanIntInput("50"))
+        assertEquals("50", cleanIntInput(" 50 ms"))
+        assertEquals("", cleanIntInput("abc"))
+    }
+
+    @Test
+    fun cleanFloatInputKeepsNumericChars() {
+        assertEquals("0.5", cleanFloatInput("0.5"))
+        assertEquals("-1.5", cleanFloatInput(" -1.5 "))
+        assertEquals("1.0", cleanFloatInput("1.0x"))
+    }
+
+    @Test
     fun xyValuesMapEachAxisToItsRange() {
         val channel = Channel(id = 1, name = "pad", type = "xy", min = 0f, max = 10f, min2 = 100f, max2 = 200f)
         val mapped = channel.xyValues(0.5f, 0.25f)

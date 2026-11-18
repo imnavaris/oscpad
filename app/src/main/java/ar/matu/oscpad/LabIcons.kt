@@ -308,6 +308,87 @@ object LabIcons {
     }
 
     @Composable
+    fun Pencil(tint: Color, modifier: Modifier = Modifier) {
+        Canvas(modifier) {
+            val w = 2.dp.toPx()
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.3f, size.height * 0.7f),
+                end = Offset(size.width * 0.66f, size.height * 0.34f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.66f, size.height * 0.34f),
+                end = Offset(size.width * 0.8f, size.height * 0.38f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.66f, size.height * 0.34f),
+                end = Offset(size.width * 0.62f, size.height * 0.48f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.3f, size.height * 0.7f),
+                end = Offset(size.width * 0.22f, size.height * 0.78f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+
+    @Composable
+    fun Save(tint: Color, modifier: Modifier = Modifier) {
+        Canvas(modifier) {
+            val w = 2.dp.toPx()
+            val left = size.width * 0.2f
+            val top = size.height * 0.14f
+            val right = size.width * 0.8f
+            val bottom = size.height * 0.86f
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(left, top),
+                size = Size(right - left, bottom - top),
+                cornerRadius = CornerRadius(size.minDimension * 0.06f),
+                style = Stroke(w),
+            )
+            drawLine(
+                color = tint,
+                start = Offset(left + (right - left) * 0.22f, top),
+                end = Offset(left + (right - left) * 0.22f, top + (bottom - top) * 0.32f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(right - (right - left) * 0.22f, top),
+                end = Offset(right - (right - left) * 0.22f, top + (bottom - top) * 0.32f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(left + (right - left) * 0.22f, top + (bottom - top) * 0.32f),
+                end = Offset(right - (right - left) * 0.22f, top + (bottom - top) * 0.32f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(left + (right - left) * 0.2f, bottom - (bottom - top) * 0.34f),
+                size = Size((right - left) * 0.6f, (bottom - top) * 0.22f),
+                cornerRadius = CornerRadius(2.dp.toPx()),
+                style = Stroke(w),
+            )
+        }
+    }
+
+    @Composable
     fun Stack(tint: Color, modifier: Modifier = Modifier) {
         Canvas(modifier) {
             val w = 2.dp.toPx()
