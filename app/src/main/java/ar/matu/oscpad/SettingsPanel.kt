@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsPanel(
     net: NetConfig,
+    localIp: String,
     onChange: (NetConfig) -> Unit,
     onTestAll: () -> Unit,
     onClearAll: () -> Unit,
@@ -61,6 +62,19 @@ fun SettingsPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Text(
+            text = "Este celu: $localIp",
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = Mono,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (!sameSubnet(localIp, host)) {
+            Text(
+                text = "Red distinta al destino: no va a llegar nada",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(
                 label = "IP",
@@ -106,7 +120,7 @@ fun SettingsPanel(
             ),
         ) {
             Text(
-                text = "Probar todo",
+                text = "Probar canales",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Medium,
             )
@@ -123,7 +137,7 @@ fun SettingsPanel(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = if (confirmClear) "Tocar de nuevo para borrar todos" else "Borrar todos",
+                text = if (confirmClear) "Tocar de nuevo para borrar canales" else "Borrar canales",
                 style = MaterialTheme.typography.labelLarge,
                 color = if (confirmClear) {
                     MaterialTheme.colorScheme.error

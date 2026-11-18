@@ -2,6 +2,7 @@ package ar.matu.oscpad
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -250,37 +252,58 @@ fun ChannelModule(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            sensors.forEach { s ->
-                                TypeChip(
-                                    label = s.label,
-                                    selected = s.kind == channel.sensorKind,
-                                    onClick = {
-                                        onDone(
-                                            channel.copy(
-                                                sensorKind = s.kind,
-                                                sensorAxis = s.axes.first(),
-                                            ),
+                        sensors.chunked(3).forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                row.forEach { s ->
+                                    val selected = s.kind == channel.sensorKind
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                onDone(
+                                                    channel.copy(
+                                                        sensorKind = s.kind,
+                                                        sensorAxis = s.axes.first(),
+                                                    ),
+                                                )
+                                            }
+                                            .padding(vertical = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        SensorGlyph(
+                                            kind = s.kind,
+                                            tint = if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
                                         )
-                                    },
-                                )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = s.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        )
+                                    }
+                                }
+                                repeat(3 - row.size) {
+                                    Spacer(Modifier.weight(1f))
+                                }
                             }
                         }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             (spec?.axes ?: emptyList()).forEach { axis ->
                                 TypeChip(
                                     label = axis,
                                     selected = axis == channel.sensorAxis,
+                                    modifier = Modifier.weight(1f),
                                     onClick = { onDone(channel.copy(sensorAxis = axis)) },
                                 )
                             }
@@ -304,27 +327,38 @@ fun ChannelModule(
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .background(Color(r, g, b), RoundedCornerShape(12.dp)),
+                                .size(120.dp)
+                                .background(Color(r, g, b), RoundedCornerShape(16.dp))
+                                .border(
+                                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                    RoundedCornerShape(16.dp),
+                                ),
                         )
+                        Spacer(Modifier.height(8.dp))
                         ColorSlider(
                             label = "R",
                             value = r,
+                            tint = Color(0xFFFF5252),
                             onChange = { push(channel.copy(level = it)) },
+                            onDone = { onDone(channel) },
                         )
                         ColorSlider(
                             label = "G",
                             value = g,
+                            tint = MaterialTheme.colorScheme.primary,
                             onChange = { push(channel.copy(level2 = it)) },
+                            onDone = { onDone(channel) },
                         )
                         ColorSlider(
                             label = "B",
                             value = b,
+                            tint = Color(0xFF5AA9FF),
                             onChange = { push(channel.copy(level3 = it)) },
+                            onDone = { onDone(channel) },
                         )
                     }
                 }
@@ -337,6 +371,7 @@ fun ChannelModule(
                     formatValue(channel.min + range * channel.level2)
                 "color" -> "${formatValue(channel.level)}  " +
                     "${formatValue(channel.level2)}  ${formatValue(channel.level3)}"
+                "sensor" -> formatValue(channel.level)
                 else -> formatValue(channel.current())
             },
             style = MaterialTheme.typography.displaySmall,
@@ -438,10 +473,25 @@ fun ChannelModule(
 }
 
 @Composable
+private fun SensorGlyph(kind: String, tint: Color) {
+    val modifier = Modifier.size(40.dp)
+    when (kind) {
+        "gyroscope" -> LabIcons.Gyro(tint = tint, modifier = modifier)
+        "magnetic_field" -> LabIcons.Magnet(tint = tint, modifier = modifier)
+        "light" -> LabIcons.Light(tint = tint, modifier = modifier)
+        "proximity" -> LabIcons.Prox(tint = tint, modifier = modifier)
+        "pressure" -> LabIcons.Pressure(tint = tint, modifier = modifier)
+        else -> LabIcons.Accel(tint = tint, modifier = modifier)
+    }
+}
+
+@Composable
 private fun ColorSlider(
     label: String,
     value: Float,
+    tint: Color,
     onChange: (Float) -> Unit,
+    onDone: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -450,15 +500,28 @@ private fun ColorSlider(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(32.dp),
+        )
+        Text(
+            text = formatValue(value),
+            style = MaterialTheme.typography.bodyMedium,
             fontFamily = Mono,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(16.dp),
+            modifier = Modifier.width(56.dp),
         )
         Slider(
             value = value.coerceIn(0f, 1f),
             onValueChange = onChange,
+            onValueChangeFinished = onDone,
             modifier = Modifier.weight(1f),
+            colors = SliderDefaults.colors(
+                thumbColor = tint,
+                activeTrackColor = tint.copy(alpha = 0.55f),
+                inactiveTrackColor = MaterialTheme.colorScheme.outline,
+            ),
         )
     }
 }
@@ -467,9 +530,11 @@ private fun ColorSlider(
 private fun TypeChip(
     label: String,
     selected: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Surface(
+        modifier = modifier,
         shape = RoundedCornerShape(12.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primary

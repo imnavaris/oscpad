@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -78,13 +75,11 @@ fun PresetsPanel(
                     Spacer(Modifier.width(4.dp))
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
+                            .size(28.dp)
                             .clickable { onDelete(preset.id) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Borrar ${preset.name}",
+                        LabIcons.X(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp),
                         )
@@ -112,14 +107,22 @@ fun PresetsPanel(
             textStyle = MaterialTheme.typography.labelMedium,
         )
         Spacer(Modifier.width(8.dp))
-        TextButton(
+        IconButton(
             onClick = {
                 onSaveCurrent(name)
                 name = ""
             },
             enabled = name.isNotBlank(),
+            modifier = Modifier.size(48.dp),
         ) {
-            Text("Guardar", fontWeight = FontWeight.Medium)
+            LabIcons.Check(
+                tint = if (name.isNotBlank()) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 }

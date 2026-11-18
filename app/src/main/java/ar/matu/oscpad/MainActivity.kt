@@ -192,8 +192,9 @@ private fun App() {
             val channel = channelsState.value.first { it.id == id }
             val feed = SensorFeed(context, key.first, key.second, key.third) { raw ->
                 channelsState.value.find { it.id == id }?.let { ch ->
-                    live(ch.copy(level = raw))
-                    send(ch.address(), raw)
+                    val v = raw.coerceIn(ch.min, ch.max)
+                    live(ch.copy(level = v))
+                    send(ch.address(), v)
                 }
             }
             feeds[id] = feed
@@ -328,6 +329,7 @@ private fun App() {
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         SettingsPanel(
                             net = net,
+                            localIp = remember { localIpv4() ?: "?" },
                             onChange = {
                                 net = it
                                 NetStore.save(context, it)

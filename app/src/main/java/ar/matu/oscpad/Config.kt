@@ -67,6 +67,23 @@ fun Channel.current() = if (type == "button") {
     min + (max - min) * level
 }
 
+fun localIpv4(): String? {
+    return try {
+        java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+            .flatMap { java.util.Collections.list(it.inetAddresses) }
+            .firstOrNull { it is java.net.Inet4Address && !it.isLoopbackAddress && it.isSiteLocalAddress }
+            ?.hostAddress
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun sameSubnet(a: String, b: String): Boolean {
+    fun prefix(ip: String) = ip.trim().split(".").take(3)
+    val pa = prefix(a)
+    val pb = prefix(b)
+    return pa.size == 3 && pa == pb
+}
 fun sanitizeName(raw: String): String? {
     val clean = raw.trim()
         .replace(Regex("\\s+"), "_")
