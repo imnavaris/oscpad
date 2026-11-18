@@ -264,6 +264,50 @@ object LabIcons {
     }
 
     @Composable
+    fun Grid(tint: Color, modifier: Modifier = Modifier) {
+        Canvas(modifier) {
+            val w = 2.dp.toPx()
+            val s = size.minDimension * 0.32f
+            val o = size.minDimension * 0.12f
+            val cr = CornerRadius(size.minDimension * 0.06f)
+            listOf(Offset(o, o), Offset(size.minDimension - o - s, o), Offset(o, size.minDimension - o - s), Offset(size.minDimension - o - s, size.minDimension - o - s)).forEach { top ->
+                drawRoundRect(
+                    color = tint,
+                    topLeft = top,
+                    size = Size(s, s),
+                    cornerRadius = cr,
+                    style = Stroke(w),
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun Sliders(tint: Color, modifier: Modifier = Modifier) {
+        Canvas(modifier) {
+            val w = 2.dp.toPx()
+            val x1 = size.width * 0.32f
+            val x2 = size.width * 0.68f
+            drawLine(
+                color = tint,
+                start = Offset(x1, size.height * 0.12f),
+                end = Offset(x1, size.height * 0.88f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(x2, size.height * 0.12f),
+                end = Offset(x2, size.height * 0.88f),
+                strokeWidth = w,
+                cap = StrokeCap.Round,
+            )
+            drawCircle(color = tint, radius = w * 1.6f, center = Offset(x1, size.height * 0.38f))
+            drawCircle(color = tint, radius = w * 1.6f, center = Offset(x2, size.height * 0.62f))
+        }
+    }
+
+    @Composable
     fun Stack(tint: Color, modifier: Modifier = Modifier) {
         Canvas(modifier) {
             val w = 2.dp.toPx()

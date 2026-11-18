@@ -1,14 +1,13 @@
 package ar.matu.oscpad
 
+import android.app.Activity
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,8 +33,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -43,9 +48,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,7 +59,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,6 +67,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val OscScheme = darkColorScheme(
@@ -79,8 +84,6 @@ private val OscScheme = darkColorScheme(
     error = Color(0xFFFF5252),
     onError = Color(0xFF0A0A0A),
 )
-
-private val Ease = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,8 +105,25 @@ private fun App() {
     var channels by remember { mutableStateOf(ChannelStore.load(context)) }
     var presets by remember { mutableStateOf(PresetStore.load(context)) }
     var activePresetId by remember { mutableStateOf<Long?>(null) }
-    var settingsOpen by remember { mutableStateOf(false) }
-    var presetsOpen by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(1) }
+    val history = remember { mutableStateListOf(1) }
+    val activity = context as? Activity
+
+    fun selectTab(i: Int) {
+        if (i != tab) {
+            tab = i
+            history.add(i)
+        }
+    }
+
+    BackHandler {
+        if (history.size > 1) {
+            history.removeLast()
+            tab = history.last()
+        } else {
+            activity?.finish()
+        }
+    }
     var connOk by remember { mutableStateOf(true) }
     var connAt by remember { mutableStateOf(0L) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -137,9 +157,14 @@ private fun App() {
         ChannelStore.save(context, updated)
         activePresetId = null
         scope.launch {
+            launch {
+                delay(5000)
+                snackbarHostState.currentSnackbarData?.dismiss()
+            }
             val result = snackbarHostState.showSnackbar(
                 message = "Canal borrado",
                 actionLabel = "Deshacer",
+                duration = SnackbarDuration.Indefinite,
             )
             if (result == SnackbarResult.ActionPerformed && channels.none { it.id == removed.id }) {
                 val back = channels.toMutableList()
@@ -277,49 +302,12 @@ private fun App() {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    IconButton(onClick = {
-                        presetsOpen = !presetsOpen
-                        if (presetsOpen) settingsOpen = false
-                    }) {
-                        LabIcons.Stack(
-                            tint = if (presetsOpen) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                    IconButton(onClick = {
-                        settingsOpen = !settingsOpen
-                        if (settingsOpen) presetsOpen = false
-                    }) {
-                        LabIcons.Gear(
-                            tint = if (settingsOpen) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
                 }
             }
 
-            if (settingsOpen || presetsOpen) {
-                Spacer(Modifier.height(16.dp))
-                val reveal = remember { Animatable(0f) }
-                LaunchedEffect(reveal) {
-                    reveal.animateTo(1f, tween(240, easing = Ease))
-                }
-                Column(
-                    modifier = Modifier.graphicsLayer {
-                        alpha = reveal.value
-                        translationY = (1f - reveal.value) * 12.dp.toPx()
-                    },
-                ) {
-                    if (presetsOpen) {
-                        PresetsPanel(
+            when (tab) {
+                2 -> {
+                    PresetsPanel(
                             presets = presets,
                             activeId = activePresetId,
                             onSelect = { preset ->
@@ -348,8 +336,11 @@ private fun App() {
                                 if (activePresetId == id) activePresetId = null
                             },
                         )
-                    } else {
-                        SettingsPanel(
+                    }
+                    3 -> {
+                        Spacer(Modifier.height(16.dp))
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            SettingsPanel(
                             net = net,
                             localIp = remember { localIpv4() ?: "?" },
                             onChange = {
@@ -366,9 +357,67 @@ private fun App() {
                                 activePresetId = null
                             },
                         )
+                        }
                     }
-                }
-            } else if (channels.isEmpty()) {
+                    0 -> {
+                        if (channels.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Sin canales: creá uno en Canales",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                items(channels, key = { it.id }) { channel ->
+                                    val idx = channels.indexOfFirst { it.id == channel.id }
+                                    Column(
+                                        modifier = Modifier.clickable {
+                                            selectTab(1)
+                                            scope.launch {
+                                                listState.animateScrollToItem(idx * 2)
+                                            }
+                                        },
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Text(
+                                            text = channel.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = channelValueText(channel),
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontFamily = Mono,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = channel.address(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = Mono,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else -> if (channels.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -386,7 +435,6 @@ private fun App() {
                     }
                 }
             } else {
-                var overviewOpen by remember { mutableStateOf(false) }
                 val currentPage by remember(channels) {
                     derivedStateOf {
                         val key = listState.layoutInfo.visibleItemsInfo
@@ -394,51 +442,7 @@ private fun App() {
                         channels.indexOfFirst { it.id == key } + 1
                     }
                 }
-                if (overviewOpen) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        items(channels, key = { it.id }) { channel ->
-                            val idx = channels.indexOfFirst { it.id == channel.id }
-                            Column(
-                                modifier = Modifier.clickable {
-                                    overviewOpen = false
-                                    scope.launch {
-                                        listState.animateScrollToItem(idx * 2)
-                                    }
-                                },
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Text(
-                                    text = channel.name,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = channelValueText(channel),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontFamily = Mono,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = channel.address(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = Mono,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                } else {
-                    LazyRow(
+                LazyRow(
                     modifier = Modifier.weight(1f),
                     state = listState,
                 ) {
@@ -487,18 +491,98 @@ private fun App() {
                 ) {
                     Text(
                         text = "${currentPage.coerceAtLeast(1)}/${channels.size}",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         fontFamily = Mono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { overviewOpen = true },
                     )
                 }
                 }
             }
 
-            SnackbarHost(snackbarHostState)
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(12.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    actionColor = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.background,
+            ) {
+                TabItem(0, tab, ::selectTab, "Inicio") {
+                    LabIcons.Grid(
+                        tint = if (tab == 0) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                TabItem(1, tab, ::selectTab, "Canales") {
+                    LabIcons.Sliders(
+                        tint = if (tab == 1) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                TabItem(2, tab, ::selectTab, "Presets") {
+                    LabIcons.Stack(
+                        tint = if (tab == 2) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                TabItem(3, tab, ::selectTab, "Ajustes") {
+                    LabIcons.Gear(
+                        tint = if (tab == 3) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun RowScope.TabItem(
+    index: Int,
+    tab: Int,
+    onSelect: (Int) -> Unit,
+    label: String,
+    icon: @Composable () -> Unit,
+) {
+    NavigationBarItem(
+        selected = tab == index,
+        onClick = { onSelect(index) },
+        icon = icon,
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        },
+        colors = NavigationBarItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.primary,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            indicatorColor = Color.Transparent,
+        ),
+    )
 }
 
 @Composable
