@@ -48,7 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -102,7 +101,7 @@ private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var net by remember { mutableStateOf(NetStore.load(context)) }
-    var channels by remember { mutableStateOf(ChannelStore.load(context)) }
+    var channels by remember { mutableStateOf(ChannelStore.load(context).sortedBy { it.id }) }
     var presets by remember { mutableStateOf(PresetStore.load(context)) }
     var activePresetId by remember { mutableStateOf<Long?>(null) }
     var tab by remember { mutableStateOf(1) }
@@ -294,7 +293,7 @@ private fun App() {
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = "${net.host}:${net.port}",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -312,9 +311,10 @@ private fun App() {
                             presets = presets,
                             activeId = activePresetId,
                             onSelect = { preset ->
-                                channels = preset.channels
+                                val ordered = preset.channels.sortedBy { it.id }
+                                channels = ordered
                                 net = preset.net
-                                ChannelStore.save(context, preset.channels)
+                                ChannelStore.save(context, ordered)
                                 NetStore.save(context, preset.net)
                                 activePresetId = preset.id
                             },
@@ -351,6 +351,13 @@ private fun App() {
                                 }
                                 presets = updated
                                 PresetStore.save(context, updated)
+                            },
+                            onReorder = { reordered ->
+                                presets = reordered
+                                PresetStore.save(context, reordered)
+                                if (activePresetId != null && reordered.none { it.id == activePresetId }) {
+                                    activePresetId = null
+                                }
                             },
                             onGoChannels = {
                                 selectTab(1)
@@ -474,13 +481,6 @@ private fun App() {
                     }
                 }
             } else {
-                val currentPage by remember(channels) {
-                    derivedStateOf {
-                        val key = listState.layoutInfo.visibleItemsInfo
-                            .firstOrNull { it.key is Long }?.key
-                        channels.indexOfFirst { it.id == key } + 1
-                    }
-                }
                 LazyRow(
                     modifier = Modifier.weight(1f),
                     state = listState,
@@ -522,21 +522,8 @@ private fun App() {
                         }
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "${currentPage.coerceAtLeast(1)}/${channels.size}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontFamily = Mono,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
                 }
-                    }
             }
             }
 
@@ -661,7 +648,14 @@ private fun AddPage(count: Int, onAdd: () -> Unit, modifier: Modifier = Modifier
             Spacer(Modifier.height(8.dp))
             Text(
                 text = "$count/8",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.titleMedium,
+                fontFamily = Mono,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Agregar nuevo canal",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

@@ -63,10 +63,15 @@ fun SettingsPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Este celu: $localIp",
-            style = MaterialTheme.typography.labelMedium,
-            fontFamily = Mono,
+            text = "ESTE CELU",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = localIp,
+            style = MaterialTheme.typography.titleLarge,
+            fontFamily = Mono,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         if (!sameSubnet(localIp, host)) {
             Text(
