@@ -103,6 +103,7 @@ private fun App() {
     var dragOrigIdx by remember { mutableStateOf(0) }
     var dragTotalX by remember { mutableStateOf(0f) }
     var cellWpx by remember { mutableStateOf(0f) }
+    val listState = rememberLazyListState()
     val sender = remember(net.host, net.port) { OscSender(net.host, net.port) }
 
     DisposableEffect(sender) {
@@ -139,6 +140,9 @@ private fun App() {
         val updated = channels + Channel(id = id, name = "canal$id")
         channels = updated
         ChannelStore.save(context, updated)
+        scope.launch {
+            listState.animateScrollToItem((updated.size - 1) * 2)
+        }
     }
 
     fun moveDragged(targetIdx: Int) {
@@ -263,7 +267,6 @@ private fun App() {
                     }
                 }
             } else {
-                val listState = rememberLazyListState()
                 val currentPage by remember(channels) {
                     derivedStateOf {
                         val key = listState.layoutInfo.visibleItemsInfo
