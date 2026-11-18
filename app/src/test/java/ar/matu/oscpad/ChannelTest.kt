@@ -1,10 +1,15 @@
 package ar.matu.oscpad
 
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ChannelTest {
+    private val json = Json { ignoreUnknownKeys = true }
+
     @Test
     fun addressPrefixesNameWithSlash() {
         assertEquals("/canal1", Channel(id = 1, name = "canal1").address())
@@ -36,5 +41,41 @@ class ChannelTest {
         assertEquals("abc", sanitizeName("  abc  "))
         assertNull(sanitizeName("   "))
         assertNull(sanitizeName("!!!"))
+    }
+
+    @Test
+    fun channelDefaultsForExtendedControls() {
+        val channel = Channel(id = 1, name = "luz")
+        assertEquals(0.5f, channel.level2, 0.001f)
+        assertEquals(0.5f, channel.level3, 0.001f)
+        assertEquals("accelerometer", channel.sensorKind)
+        assertEquals("x", channel.sensorAxis)
+        assertEquals(50L, channel.rateMs)
+    }
+
+    @Test
+    fun legacyChannelJsonFallsBackToDefaults() {
+        val decoded = json.decodeFromString<Channel>("""{"id":1,"name":"luz"}""")
+        assertEquals(0.5f, decoded.level, 0.001f)
+        assertEquals(0.5f, decoded.level2, 0.001f)
+        assertEquals(0.5f, decoded.level3, 0.001f)
+        assertEquals("accelerometer", decoded.sensorKind)
+        assertEquals("x", decoded.sensorAxis)
+        assertEquals(50L, decoded.rateMs)
+    }
+
+    @Test
+    fun presetRoundTripsThroughJson() {
+        val preset = Preset(
+            id = 7,
+            name = "escena",
+            channels = listOf(
+                Channel(id = 1, name = "luz", level2 = 0.25f, rateMs = 120L),
+                Channel(id = 2, name = "play", type = "button", on = true),
+            ),
+            net = NetConfig(host = "10.0.0.2", port = 9000),
+        )
+        val decoded = json.decodeFromString<Preset>(json.encodeToString(preset))
+        assertEquals(preset, decoded)
     }
 }

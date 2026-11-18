@@ -1,5 +1,7 @@
 package ar.matu.oscpad
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -7,7 +9,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,12 +28,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -44,21 +44,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 private val OscScheme = darkColorScheme(
     primary = Color(0xFF39FF14),
@@ -68,8 +68,8 @@ private val OscScheme = darkColorScheme(
     surface = Color(0xFF0A0A0A),
     onSurface = Color(0xFFE2E2E2),
     surfaceVariant = Color(0xFF141414),
-    onSurfaceVariant = Color(0xFF8A8A8A),
-    outline = Color(0xFF242424),
+    onSurfaceVariant = Color(0xFFA6A6A6),
+    outline = Color(0xFF2E2E2E),
     outlineVariant = Color(0xFF1A1A1A),
     error = Color(0xFFFF5252),
     onError = Color(0xFF0A0A0A),
@@ -89,20 +89,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val dividerPx = with(density) { 25.dp.toPx() }
     var net by remember { mutableStateOf(NetStore.load(context)) }
     var channels by remember { mutableStateOf(ChannelStore.load(context)) }
+    var presets by remember { mutableStateOf(PresetStore.load(context)) }
+    var activePresetId by remember { mutableStateOf<Long?>(null) }
     var settingsOpen by remember { mutableStateOf(false) }
-    var dragId by remember { mutableStateOf<Long?>(null) }
-    var dragOrigIdx by remember { mutableStateOf(0) }
-    var dragTotalX by remember { mutableStateOf(0f) }
-    var cellWpx by remember { mutableStateOf(0f) }
+    var connOk by remember { mutableStateOf(true) }
+    var connAt by remember { mutableStateOf(0L) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val sender = remember(net.host, net.port) { OscSender(net.host, net.port) }
 
@@ -121,17 +119,50 @@ private fun App() {
         val updated = replace(channels, next)
         channels = updated
         ChannelStore.save(context, updated)
+        activePresetId = null
     }
 
     fun remove(id: Long) {
+        val idx = channels.indexOfFirst { it.id == id }
+        if (idx == -1) return
+        val removed = channels[idx]
         val updated = channels.filter { it.id != id }
         channels = updated
         ChannelStore.save(context, updated)
+        activePresetId = null
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "Canal borrado",
+                actionLabel = "Deshacer",
+            )
+            if (result == SnackbarResult.ActionPerformed && channels.none { it.id == removed.id }) {
+                val back = channels.toMutableList()
+                back.add(idx.coerceIn(0, back.size), removed)
+                channels = back
+                ChannelStore.save(context, back)
+            }
+        }
+    }
+
+    fun markSent(ok: Boolean) {
+        connOk = ok
+        connAt = System.currentTimeMillis()
     }
 
     fun send(address: String, value: Float) {
         if (!address.startsWith('/')) return
-        scope.launch(Dispatchers.IO) { sender.send(Osc.encodeFloat(address, value)) }
+        scope.launch(Dispatchers.IO) {
+            val ok = sender.send(Osc.encodeFloat(address, value))
+            launch(Dispatchers.Main) { markSent(ok) }
+        }
+    }
+
+    fun sendMany(address: String, values: FloatArray) {
+        if (!address.startsWith('/')) return
+        scope.launch(Dispatchers.IO) {
+            val ok = sender.send(Osc.encodeFloats(address, values))
+            launch(Dispatchers.Main) { markSent(ok) }
+        }
     }
 
     fun addChannel() {
@@ -140,37 +171,59 @@ private fun App() {
         val updated = channels + Channel(id = id, name = "canal$id")
         channels = updated
         ChannelStore.save(context, updated)
+        activePresetId = null
         scope.launch {
             listState.animateScrollToItem((updated.size - 1) * 2)
         }
     }
 
-    fun moveDragged(targetIdx: Int) {
-        val id = dragId ?: return
-        val list = channels.toMutableList()
-        val cur = list.indexOfFirst { it.id == id }
-        val target = targetIdx.coerceIn(0, list.lastIndex)
-        if (cur == -1 || cur == target) return
-        list.add(target, list.removeAt(cur))
-        channels = list
+    val sensorSpecs = remember { listSensors(context) }
+    val feeds = remember { mutableMapOf<Long, SensorFeed>() }
+    val channelsState = rememberUpdatedState(channels)
+    val sensorKeys = channels.filter { it.type == "sensor" }
+        .map {
+            Triple(it.id, it.name, Triple(it.sensorKind, it.sensorAxis, it.rateMs))
+        }
+
+    DisposableEffect(sensorKeys) {
+        val wanted = sensorKeys.map { it.first to it.third }.toMap()
+        wanted.forEach { (id, key) ->
+            if (feeds[id] != null) return@forEach
+            val channel = channelsState.value.first { it.id == id }
+            val feed = SensorFeed(context, key.first, key.second, key.third) { raw ->
+                channelsState.value.find { it.id == id }?.let { ch ->
+                    live(ch.copy(level = raw))
+                    send(ch.address(), raw)
+                }
+            }
+            feeds[id] = feed
+            feed.start()
+        }
+        onDispose {
+            feeds.values.forEach { it.stop() }
+            feeds.clear()
+        }
     }
 
-    fun onTitleDragStart(channel: Channel) {
-        dragId = channel.id
-        dragOrigIdx = channels.indexOfFirst { it.id == channel.id }
-        dragTotalX = 0f
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val wifiLock = remember {
+        (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
+            .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "oscpad:live")
     }
 
-    fun onTitleDrag(dx: Float) {
-        if (cellWpx <= 0f) return
-        dragTotalX += dx
-        moveDragged(dragOrigIdx + (dragTotalX / (cellWpx + dividerPx)).roundToInt())
-    }
-
-    fun onTitleDragEnd() {
-        dragId = null
-        dragTotalX = 0f
-        ChannelStore.save(context, channels)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> if (!wifiLock.isHeld) wifiLock.acquire()
+                Lifecycle.Event.ON_PAUSE -> if (wifiLock.isHeld) wifiLock.release()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (wifiLock.isHeld) wifiLock.release()
+        }
     }
 
     Surface(
@@ -199,20 +252,32 @@ private fun App() {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                color = if (connOk) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                                shape = CircleShape,
+                            ),
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         text = "${net.host}:${net.port}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     IconButton(onClick = { settingsOpen = !settingsOpen }) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Ajustes",
+                        LabIcons.Gear(
                             tint = if (settingsOpen) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -225,27 +290,59 @@ private fun App() {
                     reveal.animateTo(1f, tween(240, easing = Ease))
                 }
                 Column(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .graphicsLayer {
-                            alpha = reveal.value
-                            translationY = (1f - reveal.value) * 12.dp.toPx()
-                        },
+                    modifier = Modifier.graphicsLayer {
+                        alpha = reveal.value
+                        translationY = (1f - reveal.value) * 12.dp.toPx()
+                    },
                 ) {
-                    SettingsPanel(
-                        net = net,
-                        onChange = {
-                            net = it
-                            NetStore.save(context, it)
+                    PresetsPanel(
+                        presets = presets,
+                        activeId = activePresetId,
+                        onSelect = { preset ->
+                            channels = preset.channels
+                            net = preset.net
+                            ChannelStore.save(context, preset.channels)
+                            NetStore.save(context, preset.net)
+                            activePresetId = preset.id
                         },
-                        onTestAll = {
-                            channels.forEach { send(it.address(), it.current()) }
+                        onSaveCurrent = { name ->
+                            val preset = Preset(
+                                id = PresetStore.nextPresetId(context),
+                                name = name.trim(),
+                                channels = channels,
+                                net = net,
+                            )
+                            val updated = presets + preset
+                            presets = updated
+                            PresetStore.save(context, updated)
+                            activePresetId = preset.id
                         },
-                        onClearAll = {
-                            channels = emptyList()
-                            ChannelStore.save(context, emptyList())
+                        onDelete = { id ->
+                            val updated = presets.filter { it.id != id }
+                            presets = updated
+                            PresetStore.save(context, updated)
+                            if (activePresetId == id) activePresetId = null
                         },
                     )
+                    Spacer(Modifier.height(16.dp))
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsPanel(
+                            net = net,
+                            onChange = {
+                                net = it
+                                NetStore.save(context, it)
+                                activePresetId = null
+                            },
+                            onTestAll = {
+                                channels.forEach { send(it.address(), it.current()) }
+                            },
+                            onClearAll = {
+                                channels = emptyList()
+                                ChannelStore.save(context, emptyList())
+                                activePresetId = null
+                            },
+                        )
+                    }
                 }
             } else if (channels.isEmpty()) {
                 Box(
@@ -258,9 +355,7 @@ private fun App() {
                         modifier = Modifier.clickable(onClick = ::addChannel),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = "Agregar canal",
+                        LabIcons.Plus(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(120.dp),
                         )
@@ -277,43 +372,23 @@ private fun App() {
                 LazyRow(
                     modifier = Modifier.weight(1f),
                     state = listState,
-                    userScrollEnabled = dragId == null,
                 ) {
                     channels.forEachIndexed { i, channel ->
                         item(key = channel.id) {
-                            val idx = channels.indexOfFirst { it.id == channel.id }
-                            val active = dragId == channel.id
-                            val tx = if (active) {
-                                dragTotalX - (idx - dragOrigIdx) * (cellWpx + dividerPx)
-                            } else {
-                                0f
-                            }
                             Box(
                                 modifier = Modifier
                                     .fillParentMaxWidth()
-                                    .fillParentMaxHeight()
-                                    .onSizeChanged { if (it.width > 0) cellWpx = it.width.toFloat() }
-                                    .then(
-                                        if (active) {
-                                            Modifier
-                                                .graphicsLayer { translationX = tx }
-                                                .zIndex(1f)
-                                        } else {
-                                            Modifier
-                                        },
-                                    )
-                                    .then(if (dragId != null) Modifier.animateItem() else Modifier),
+                                    .fillParentMaxHeight(),
                             ) {
                                 ChannelModule(
                                     channel = channel,
                                     taken = channels.map { it.name }.toSet() - channel.name,
+                                    sensors = sensorSpecs,
                                     onLive = ::live,
                                     onDone = ::done,
                                     onDelete = { remove(channel.id) },
                                     onSend = ::send,
-                                    onTitleDragStart = { onTitleDragStart(channel) },
-                                    onTitleDrag = ::onTitleDrag,
-                                    onTitleDragEnd = ::onTitleDragEnd,
+                                    onSendMany = ::sendMany,
                                 )
                             }
                         }
@@ -349,6 +424,8 @@ private fun App() {
                     )
                 }
             }
+
+            SnackbarHost(snackbarHostState)
         }
     }
 }
@@ -380,9 +457,7 @@ private fun AddPage(count: Int, onAdd: () -> Unit, modifier: Modifier = Modifier
                 modifier = Modifier.clickable(onClick = onAdd),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Agregar canal",
+                LabIcons.Plus(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(120.dp),
                 )

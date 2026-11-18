@@ -29,12 +29,34 @@ object Osc {
 
 class OscSender(private val host: String, private val port: Int) {
     private val socket = DatagramSocket()
+    private var address: InetAddress? = resolve()
+    private var lastSent: ByteArray? = null
 
-    fun send(bytes: ByteArray): Boolean = try {
-        socket.send(DatagramPacket(bytes, bytes.size, InetAddress.getByName(host), port))
+    fun send(bytes: ByteArray): Boolean {
+        if (lastSent?.contentEquals(bytes) == true) return true
+        val target = address ?: resolve()?.also { address = it } ?: return false
+        if (transmit(bytes, target)) {
+            lastSent = bytes.copyOf()
+            return true
+        }
+        val retried = resolve() ?: return false
+        address = retried
+        if (!transmit(bytes, retried)) return false
+        lastSent = bytes.copyOf()
+        return true
+    }
+
+    private fun transmit(bytes: ByteArray, target: InetAddress): Boolean = try {
+        socket.send(DatagramPacket(bytes, bytes.size, target, port))
         true
     } catch (e: IOException) {
         false
+    }
+
+    private fun resolve(): InetAddress? = try {
+        InetAddress.getByName(host)
+    } catch (e: IOException) {
+        null
     }
 
     fun close() {

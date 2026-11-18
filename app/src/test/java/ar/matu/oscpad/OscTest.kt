@@ -3,7 +3,12 @@ package ar.matu.oscpad
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.SocketTimeoutException
 
 class OscTest {
     @Test
@@ -50,5 +55,47 @@ class OscTest {
         assertTrue(throttle.shouldSend(0))
         assertFalse(throttle.shouldSend(50))
         assertTrue(throttle.shouldSend(100))
+    }
+
+    @Test
+    fun senderSkipsIdenticalDatagramsAndSendsDistinctOnes() {
+        val listener = DatagramSocket(0, InetAddress.getByName("127.0.0.1"))
+        listener.soTimeout = 2000
+        val sender = OscSender("127.0.0.1", listener.localPort)
+        try {
+            val first = Osc.encodeFloat("/fader", 0.5f)
+            val second = Osc.encodeFloat("/fader", 0.25f)
+            assertTrue(sender.send(first))
+            assertTrue(sender.send(first))
+            assertArrayEquals(first, receive(listener))
+            listener.soTimeout = 200
+            try {
+                receive(listener)
+                fail("identical datagram was sent twice")
+            } catch (_: SocketTimeoutException) {
+            }
+            listener.soTimeout = 2000
+            assertTrue(sender.send(second))
+            assertArrayEquals(second, receive(listener))
+        } finally {
+            sender.close()
+            listener.close()
+        }
+    }
+
+    @Test
+    fun senderReturnsFalseForUnresolvableHost() {
+        val sender = OscSender("invalid.invalid", 9000)
+        try {
+            assertFalse(sender.send(Osc.encodeFloat("/fader", 1.0f)))
+        } finally {
+            sender.close()
+        }
+    }
+
+    private fun receive(socket: DatagramSocket): ByteArray {
+        val packet = DatagramPacket(ByteArray(1024), 1024)
+        socket.receive(packet)
+        return packet.data.copyOf(packet.length)
     }
 }

@@ -1,9 +1,11 @@
 package ar.matu.oscpad
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
+@Serializable
 data class NetConfig(
     val host: String = "192.168.0.112",
     val port: Int = 8000,
@@ -29,6 +31,7 @@ object NetStore {
     }
 }
 
+@Serializable
 data class Channel(
     val id: Long,
     val name: String,
@@ -39,7 +42,22 @@ data class Channel(
     val offValue: Float = 0f,
     val level: Float = 0.5f,
     val on: Boolean = false,
+    val level2: Float = 0.5f,
+    val level3: Float = 0.5f,
+    val sensorKind: String = "accelerometer",
+    val sensorAxis: String = "x",
+    val rateMs: Long = 50,
 )
+
+@Serializable
+data class Preset(
+    val id: Long,
+    val name: String,
+    val channels: List<Channel>,
+    val net: NetConfig,
+)
+
+private val json = Json { ignoreUnknownKeys = true }
 
 fun Channel.address() = "/$name"
 
@@ -65,21 +83,9 @@ object ChannelStore {
         val raw = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
             .getString("channels", null) ?: return emptyList()
         return try {
-            val arr = JSONArray(raw)
-            List(arr.length()) { i ->
-                val o = arr.getJSONObject(i)
-                val type = o.optString("type", "fader")
-                Channel(
-                    id = o.getLong("id"),
-                    name = o.getString("name"),
-                    type = if (type == "button") "button" else "fader",
-                    min = o.optDouble("min", 0.0).toFloat(),
-                    max = o.optDouble("max", 1.0).toFloat(),
-                    onValue = o.optDouble("onValue", 1.0).toFloat(),
-                    offValue = o.optDouble("offValue", 0.0).toFloat(),
-                    level = o.optDouble("level", 0.5).toFloat(),
-                    on = o.optBoolean("on", false),
-                )
+            json.decodeFromString<List<Channel>>(raw).map {
+                val t = it.type
+                it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
             }
         } catch (e: Exception) {
             emptyList()
@@ -87,24 +93,9 @@ object ChannelStore {
     }
 
     fun save(context: Context, channels: List<Channel>) {
-        val arr = JSONArray()
-        channels.forEach { ch ->
-            arr.put(
-                JSONObject()
-                    .put("id", ch.id)
-                    .put("name", ch.name)
-                    .put("type", ch.type)
-                    .put("min", ch.min.toDouble())
-                    .put("max", ch.max.toDouble())
-                    .put("onValue", ch.onValue.toDouble())
-                    .put("offValue", ch.offValue.toDouble())
-                    .put("level", ch.level.toDouble())
-                    .put("on", ch.on),
-            )
-        }
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
             .edit()
-            .putString("channels", arr.toString())
+            .putString("channels", json.encodeToString(channels))
             .apply()
     }
 
@@ -112,6 +103,34 @@ object ChannelStore {
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val id = prefs.getLong("next_id", 1)
         prefs.edit().putLong("next_id", id + 1).apply()
+        return id
+    }
+}
+
+object PresetStore {
+    private const val FILE = "oscpad"
+
+    fun load(context: Context): List<Preset> {
+        val raw = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .getString("presets", null) ?: return emptyList()
+        return try {
+            json.decodeFromString<List<Preset>>(raw)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun save(context: Context, presets: List<Preset>) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .edit()
+            .putString("presets", json.encodeToString(presets))
+            .apply()
+    }
+
+    fun nextPresetId(context: Context): Long {
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val id = prefs.getLong("preset_next_id", 1)
+        prefs.edit().putLong("preset_next_id", id + 1).apply()
         return id
     }
 }

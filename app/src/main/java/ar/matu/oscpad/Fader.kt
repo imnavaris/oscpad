@@ -14,7 +14,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
@@ -53,11 +52,10 @@ fun Fader(
     ) {
         val level = value.coerceIn(0f, 1f)
         val middle = size.width / 2
-        val trackWidth = 6.dp.toPx()
-        val handleWidth = size.width - 8.dp.toPx()
-        val handleHeight = 26.dp.toPx()
-        val corner = handleHeight / 2
-        val top = corner + (1f - level) * (size.height - handleHeight)
+        val trackWidth = 2.dp.toPx()
+        val dotRadius = 3.dp.toPx()
+        val cursorHalf = size.width * 0.36f
+        val top = dotRadius + (1f - level) * (size.height - dotRadius * 2)
 
         drawRoundRect(
             color = colors.surfaceVariant,
@@ -67,7 +65,7 @@ fun Fader(
         )
         drawRoundRect(
             brush = Brush.verticalGradient(
-                colors = listOf(colors.primary, colors.primary.copy(alpha = 0.4f)),
+                colors = listOf(colors.primary, colors.primary.copy(alpha = 0.3f)),
                 startY = top,
                 endY = size.height,
             ),
@@ -75,24 +73,21 @@ fun Fader(
             size = Size(trackWidth, size.height - top),
             cornerRadius = CornerRadius(trackWidth / 2),
         )
-        drawRoundRect(
-            color = Color(0xFF1A1B23),
-            topLeft = Offset(middle - handleWidth / 2, top - corner),
-            size = Size(handleWidth, handleHeight),
-            cornerRadius = CornerRadius(corner),
-        )
-        drawRoundRect(
-            color = Color(0x2EFFFFFF),
-            topLeft = Offset(middle - handleWidth / 2, top - corner),
-            size = Size(handleWidth, handleHeight),
-            cornerRadius = CornerRadius(corner),
-            style = Stroke(1.dp.toPx()),
-        )
-        drawRoundRect(
+        drawLine(
             color = colors.primary,
-            topLeft = Offset(middle - 9.dp.toPx(), top - 1.dp.toPx()),
-            size = Size(18.dp.toPx(), 2.dp.toPx()),
-            cornerRadius = CornerRadius(1.dp.toPx()),
+            start = Offset(middle - cursorHalf, top),
+            end = Offset(middle + cursorHalf, top),
+            strokeWidth = 1.dp.toPx(),
+        )
+        drawCircle(
+            color = Color(0x334ADE80),
+            radius = dotRadius * 2.4f,
+            center = Offset(middle, top),
+        )
+        drawCircle(
+            color = Color(0xFF4ADE80),
+            radius = dotRadius,
+            center = Offset(middle, top),
         )
     }
 }
