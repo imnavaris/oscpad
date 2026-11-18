@@ -36,6 +36,11 @@ class ChannelTest {
     }
 
     @Test
+    fun buttonDefaultsToMomentary() {
+        assertEquals(false, Channel(id = 1, name = "t").hold)
+    }
+
+    @Test
     fun xyValuesMapEachAxisToItsRange() {
         val channel = Channel(id = 1, name = "pad", type = "xy", min = 0f, max = 10f, min2 = 100f, max2 = 200f)
         val mapped = channel.xyValues(0.5f, 0.25f)

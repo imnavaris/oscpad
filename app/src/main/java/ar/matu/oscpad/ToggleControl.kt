@@ -1,11 +1,9 @@
 package ar.matu.oscpad
 
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,63 +15,92 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-private val Ease = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
-
 @Composable
-fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit, label: String, diameter: Dp = 120.dp) {
+fun ToggleControl(
+    on: Boolean,
+    hold: Boolean,
+    onLabel: String,
+    offLabel: String,
+    onToggle: (Boolean) -> Unit,
+    onDown: () -> Unit,
+    onUp: () -> Unit,
+    diameter: Dp = 120.dp,
+) {
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = tween(140, easing = Ease),
-        label = "scale",
-    )
-    val fill by animateFloatAsState(
-        targetValue = if (on) 1f else 0f,
-        animationSpec = tween(180, easing = Ease),
-        label = "fill",
-    )
+    val active = if (hold) on else pressed
 
     Box(
         modifier = Modifier
             .size(diameter)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Switch,
-                onClick = { onToggle(!on) },
-            ),
+            .pointerInput(hold, on) {
+                detectTapGestures(
+                    onPress = {
+                        val press = PressInteraction.Press(it)
+                        interaction.emit(press)
+                        try {
+                            if (!hold) onDown()
+                            awaitRelease()
+                        } finally {
+                            if (!hold) onUp()
+                            interaction.emit(PressInteraction.Release(press))
+                        }
+                    },
+                    onTap = { if (hold) onToggle(!on) },
+                )
+            },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val radius = size.minDimension / 2 - 1.dp.toPx()
+            val r = size.minDimension / 2
+            drawCircle(color = colors.outline, radius = r)
+            drawCircle(color = colors.background, radius = r - 2.dp.toPx())
+            val capR = r - 11.dp.toPx()
+            val push = if (active) 4.dp.toPx() else 0f
+            val capC = center + Offset(0f, push)
             drawCircle(
-                color = lerp(colors.surfaceVariant, colors.primary, fill),
-                radius = radius,
+                color = colors.outlineVariant,
+                radius = capR,
+                center = capC + Offset(0f, 3.dp.toPx()),
             )
             drawCircle(
-                color = lerp(colors.outline, colors.primary.copy(alpha = 0.55f), fill),
-                radius = radius,
-                style = Stroke(1.dp.toPx()),
+                color = if (active) colors.primary else colors.surfaceVariant,
+                radius = capR,
+                center = capC,
+                style = Stroke(1.5.dp.toPx()),
+            )
+            if (active) {
+                drawCircle(color = colors.primary.copy(alpha = 0.25f), radius = capR, center = capC)
+            }
+            drawArc(
+                color = if (active) {
+                    colors.onPrimary.copy(alpha = 0.6f)
+                } else {
+                    colors.onSurfaceVariant.copy(alpha = 0.4f)
+                },
+                startAngle = 200f,
+                sweepAngle = 140f,
+                useCenter = false,
+                topLeft = Offset(capC.x - capR, capC.y - capR),
+                size = Size(capR * 2, capR * 2),
+                style = Stroke(1.5.dp.toPx()),
             )
         }
         Text(
-            text = label,
+            text = if (active) onLabel else offLabel,
             style = MaterialTheme.typography.titleMedium,
             fontFamily = Mono,
-            color = lerp(colors.onSurfaceVariant, colors.background, fill),
+            fontWeight = FontWeight.Bold,
+            color = if (active) colors.onPrimary else colors.onSurfaceVariant,
         )
     }
 }

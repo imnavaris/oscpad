@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -26,6 +27,10 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.IconButton
@@ -381,6 +386,7 @@ private fun App() {
                     }
                 }
             } else {
+                var overviewOpen by remember { mutableStateOf(false) }
                 val currentPage by remember(channels) {
                     derivedStateOf {
                         val key = listState.layoutInfo.visibleItemsInfo
@@ -388,7 +394,51 @@ private fun App() {
                         channels.indexOfFirst { it.id == key } + 1
                     }
                 }
-                LazyRow(
+                if (overviewOpen) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(channels, key = { it.id }) { channel ->
+                            val idx = channels.indexOfFirst { it.id == channel.id }
+                            Column(
+                                modifier = Modifier.clickable {
+                                    overviewOpen = false
+                                    scope.launch {
+                                        listState.animateScrollToItem(idx * 2)
+                                    }
+                                },
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    text = channel.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = channelValueText(channel),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontFamily = Mono,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = channel.address(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = Mono,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    LazyRow(
                     modifier = Modifier.weight(1f),
                     state = listState,
                 ) {
@@ -440,7 +490,9 @@ private fun App() {
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = Mono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable { overviewOpen = true },
                     )
+                }
                 }
             }
 

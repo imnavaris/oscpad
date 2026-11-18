@@ -42,6 +42,7 @@ data class Channel(
     val offValue: Float = 0f,
     val level: Float = 0.5f,
     val on: Boolean = false,
+    val hold: Boolean = false,
     val level2: Float = 0.5f,
     val level3: Float = 0.5f,
     val min2: Float = 0f,

@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +48,12 @@ import androidx.compose.ui.unit.dp
 import java.util.Locale
 
 fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
+
+fun channelValueText(channel: Channel) = when (channel.type) {
+    "xy" -> channel.xyValues().let { "${formatValue(it[0])}  ${formatValue(it[1])}" }
+    "sensor" -> formatValue(channel.level)
+    else -> formatValue(channel.current())
+}
 
 private fun sensorHint(kind: String) = when (kind) {
     "gyroscope" -> "Velocidad de giro por eje"
@@ -231,16 +238,47 @@ fun ChannelModule(
                         .fillMaxHeight(),
                 )
 
-                "button" -> ToggleControl(
-                    on = channel.on,
-                    onToggle = { state ->
-                        val next = channel.copy(on = state)
-                        onDone(next)
-                        onSend(next.address(), next.current())
-                    },
-                    label = formatValue(channel.current()),
-                    diameter = 120.dp,
-                )
+                "button" -> {
+                    ToggleControl(
+                        on = channel.on,
+                        hold = channel.hold,
+                        onLabel = formatValue(channel.onValue),
+                        offLabel = formatValue(channel.offValue),
+                        onToggle = { state ->
+                            val next = channel.copy(on = state)
+                            onDone(next)
+                            onSend(next.address(), next.current())
+                        },
+                        onDown = {
+                            val next = channel.copy(on = true)
+                            onLive(next)
+                            onSend(next.address(), channel.onValue)
+                        },
+                        onUp = {
+                            val next = channel.copy(on = false)
+                            onLive(next)
+                            onSend(next.address(), channel.offValue)
+                        },
+                        diameter = 120.dp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "Mantener apretado",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = channel.hold,
+                            onCheckedChange = { onDone(channel.copy(hold = it)) },
+                        )
+                    }
+                }
 
                 "xy" -> XyPad(
                     x = channel.level,
@@ -314,14 +352,16 @@ fun ChannelModule(
                                 }
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            (spec?.axes ?: emptyList()).forEach { axis ->
-                                TypeChip(
-                                    label = axis.replaceFirstChar { it.uppercase() },
-                                    selected = axis == channel.sensorAxis,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = { onDone(channel.copy(sensorAxis = axis)) },
-                                )
+                        if ((spec?.axes ?: emptyList()).size > 1) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                (spec?.axes ?: emptyList()).forEach { axis ->
+                                    TypeChip(
+                                        label = axis.replaceFirstChar { it.uppercase() },
+                                        selected = axis == channel.sensorAxis,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onDone(channel.copy(sensorAxis = axis)) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -347,7 +387,7 @@ fun ChannelModule(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(140.dp)
+                                .size(160.dp)
                                 .background(Color(r, g, b), RoundedCornerShape(20.dp))
                                 .border(
                                     BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -392,7 +432,7 @@ fun ChannelModule(
                                     )
                                     Text(
                                         text = formatValue(v),
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        style = MaterialTheme.typography.displaySmall,
                                         fontFamily = Mono,
                                         color = MaterialTheme.colorScheme.onSurface,
                                     )
@@ -406,13 +446,7 @@ fun ChannelModule(
         Spacer(Modifier.height(16.dp))
         if (type != "color") {
             Text(
-                text = when (type) {
-                    "xy" -> channel.xyValues().let {
-                        "${formatValue(it[0])}  ${formatValue(it[1])}"
-                    }
-                    "sensor" -> formatValue(channel.level)
-                    else -> formatValue(channel.current())
-                },
+                text = channelValueText(channel),
                 style = MaterialTheme.typography.displaySmall,
                 fontFamily = Mono,
                 color = MaterialTheme.colorScheme.onSurface,
