@@ -19,16 +19,21 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun Fader(value: Float, onChange: (Float) -> Unit, onRelease: () -> Unit) {
+fun Fader(
+    value: Float,
+    onChange: (Float) -> Unit,
+    onRelease: () -> Unit,
+    modifier: Modifier = Modifier
+        .width(64.dp)
+        .height(320.dp),
+) {
     val colors = MaterialTheme.colorScheme
     val current by rememberUpdatedState(value)
     val emit by rememberUpdatedState(onChange)
     val release by rememberUpdatedState(onRelease)
 
     Canvas(
-        modifier = Modifier
-            .width(64.dp)
-            .height(320.dp)
+        modifier = modifier
             .pointerInput(Unit) {
                 var base = 0f
                 var travel = 0f

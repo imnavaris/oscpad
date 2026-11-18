@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,44 +28,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
-private fun validAddress(value: String) = value.length > 1 && value.startsWith('/')
-
 @Composable
-fun SettingsPanel(config: Config, onChange: (Config) -> Unit, onTest: () -> Unit) {
-    var host by remember { mutableStateOf(config.host) }
-    var port by remember { mutableStateOf(config.port.toString()) }
-    var addrFader by remember { mutableStateOf(config.addrFader) }
-    var addrButton by remember { mutableStateOf(config.addrButton) }
-    var minText by remember { mutableStateOf(config.min.toString()) }
-    var maxText by remember { mutableStateOf(config.max.toString()) }
+fun SettingsPanel(
+    net: NetConfig,
+    onChange: (NetConfig) -> Unit,
+    onTestAll: () -> Unit,
+    onClearAll: () -> Unit,
+) {
+    var host by remember { mutableStateOf(net.host) }
+    var port by remember { mutableStateOf(net.port.toString()) }
+    var confirmClear by remember { mutableStateOf(false) }
 
     val portValue = port.toIntOrNull()
-    val minValue = minText.toFloatOrNull()
-    val maxValue = maxText.toFloatOrNull()
     val hostOk = host.isNotBlank()
     val portOk = portValue != null && portValue in 1..65535
-    val faderOk = validAddress(addrFader)
-    val buttonOk = validAddress(addrButton)
-    val minOk = minValue != null && (maxValue == null || minValue < maxValue)
-    val maxOk = maxValue != null && (minValue == null || minValue < maxValue)
 
     fun push() {
         val parsedPort = port.toIntOrNull() ?: return
-        val parsedMin = minText.toFloatOrNull() ?: return
-        val parsedMax = maxText.toFloatOrNull() ?: return
         if (host.isBlank()) return
-        if (!validAddress(addrFader) || !validAddress(addrButton)) return
-        if (parsedPort !in 1..65535 || parsedMin >= parsedMax) return
-        onChange(
-            config.copy(
-                host = host.trim(),
-                port = parsedPort,
-                addrFader = addrFader.trim(),
-                addrButton = addrButton.trim(),
-                min = parsedMin,
-                max = parsedMax,
-            ),
-        )
+        if (parsedPort !in 1..65535) return
+        onChange(net.copy(host = host.trim(), port = parsedPort))
     }
 
     Surface(
@@ -100,54 +83,8 @@ fun SettingsPanel(config: Config, onChange: (Config) -> Unit, onTest: () -> Unit
                     },
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Field(
-                    label = "Fader",
-                    value = addrFader,
-                    isError = !faderOk,
-                    modifier = Modifier.weight(1f),
-                    onChange = {
-                        addrFader = it
-                        push()
-                    },
-                )
-                Field(
-                    label = "Boton",
-                    value = addrButton,
-                    isError = !buttonOk,
-                    modifier = Modifier.weight(1f),
-                    onChange = {
-                        addrButton = it
-                        push()
-                    },
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Field(
-                    label = "Min",
-                    value = minText,
-                    isError = !minOk,
-                    modifier = Modifier.weight(1f),
-                    numeric = true,
-                    onChange = {
-                        minText = it
-                        push()
-                    },
-                )
-                Field(
-                    label = "Max",
-                    value = maxText,
-                    isError = !maxOk,
-                    modifier = Modifier.weight(1f),
-                    numeric = true,
-                    onChange = {
-                        maxText = it
-                        push()
-                    },
-                )
-            }
             Button(
-                onClick = onTest,
+                onClick = onTestAll,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(46.dp),
@@ -158,9 +95,30 @@ fun SettingsPanel(config: Config, onChange: (Config) -> Unit, onTest: () -> Unit
                 ),
             ) {
                 Text(
-                    text = "Probar",
+                    text = "Probar todo",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
+                )
+            }
+            TextButton(
+                onClick = {
+                    if (confirmClear) {
+                        confirmClear = false
+                        onClearAll()
+                    } else {
+                        confirmClear = true
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = if (confirmClear) "Tocar de nuevo para borrar todos" else "Borrar todos",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (confirmClear) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }
@@ -168,7 +126,7 @@ fun SettingsPanel(config: Config, onChange: (Config) -> Unit, onTest: () -> Unit
 }
 
 @Composable
-private fun Field(
+fun Field(
     label: String,
     value: String,
     isError: Boolean,

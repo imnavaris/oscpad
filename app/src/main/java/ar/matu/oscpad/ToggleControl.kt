@@ -21,12 +21,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 private val Ease = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
 @Composable
-fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit) {
+fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit, diameter: Dp = 120.dp) {
     val colors = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -43,7 +44,7 @@ fun ToggleControl(on: Boolean, onToggle: (Boolean) -> Unit) {
 
     Box(
         modifier = Modifier
-            .size(120.dp)
+            .size(diameter)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
