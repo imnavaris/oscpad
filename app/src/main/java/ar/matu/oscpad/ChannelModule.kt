@@ -37,11 +37,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.Locale
 
 fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
@@ -62,6 +62,8 @@ fun ChannelModule(
     var name by remember(channel.id) { mutableStateOf(channel.name) }
     var minText by remember(channel.id) { mutableStateOf(channel.min.toString()) }
     var maxText by remember(channel.id) { mutableStateOf(channel.max.toString()) }
+    var onText by remember(channel.id) { mutableStateOf(channel.onValue.toString()) }
+    var offText by remember(channel.id) { mutableStateOf(channel.offValue.toString()) }
     var editing by remember(channel.id) { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
@@ -70,12 +72,16 @@ fun ChannelModule(
         if (editing) focusRequester.requestFocus()
     }
 
+    val isFader = channel.type == "fader"
     val clean = sanitizeName(name)
     val minValue = minText.toFloatOrNull()
     val maxValue = maxText.toFloatOrNull()
+    val onValue = onText.toFloatOrNull()
+    val offValue = offText.toFloatOrNull()
     val nameOk = clean != null && clean !in taken
     val minOk = minValue != null && (maxValue == null || minValue < maxValue)
     val maxOk = maxValue != null && (minValue == null || minValue < maxValue)
+    val binaryOk = onValue != null && offValue != null
 
     fun pushName() {
         val c = sanitizeName(name) ?: return
@@ -89,6 +95,12 @@ fun ChannelModule(
         val mx = maxText.toFloatOrNull() ?: return
         if (mn >= mx) return
         onDone(channel.copy(min = mn, max = mx))
+    }
+
+    fun pushBinary() {
+        val on = onText.toFloatOrNull() ?: return
+        val off = offText.toFloatOrNull() ?: return
+        onDone(channel.copy(onValue = on, offValue = off))
     }
 
     fun closeEditor() {
@@ -134,7 +146,7 @@ fun ChannelModule(
                             .focusRequester(focusRequester),
                         singleLine = true,
                         isError = !nameOk,
-                        textStyle = MaterialTheme.typography.titleSmall,
+                        textStyle = MaterialTheme.typography.titleLarge,
                         shape = RoundedCornerShape(8.dp),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
@@ -147,7 +159,7 @@ fun ChannelModule(
                 } else {
                     Text(
                         text = channel.name,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.clickable {
@@ -169,13 +181,14 @@ fun ChannelModule(
                 )
             }
         }
+        Spacer(Modifier.height(20.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
-            if (channel.type == "fader") {
+            if (isFader) {
                 Fader(
                     value = channel.level,
                     onChange = { level ->
@@ -200,54 +213,90 @@ fun ChannelModule(
                 )
             }
         }
+        Spacer(Modifier.height(20.dp))
         Text(
-            text = "${channel.address()}  ${formatValue(channel.current())}",
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace,
+            text = formatValue(channel.current()),
+            style = MaterialTheme.typography.displaySmall,
+            fontFamily = Mono,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(
-                label = "Mín.",
-                value = minText,
-                isError = !minOk,
-                modifier = Modifier.weight(1f),
-                numeric = true,
-                onChange = {
-                    minText = it
-                    pushRange()
-                },
-            )
-            Field(
-                label = "Máx.",
-                value = maxText,
-                isError = !maxOk,
-                modifier = Modifier.weight(1f),
-                numeric = true,
-                onChange = {
-                    maxText = it
-                    pushRange()
-                },
-            )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = channel.address(),
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = Mono,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        Spacer(Modifier.height(16.dp))
+        if (isFader) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(
+                    label = "Mín.",
+                    value = minText,
+                    isError = !minOk,
+                    modifier = Modifier.weight(1f),
+                    numeric = true,
+                    onChange = {
+                        minText = it
+                        pushRange()
+                    },
+                )
+                Field(
+                    label = "Máx.",
+                    value = maxText,
+                    isError = !maxOk,
+                    modifier = Modifier.weight(1f),
+                    numeric = true,
+                    onChange = {
+                        maxText = it
+                        pushRange()
+                    },
+                )
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field(
+                    label = "Encendido",
+                    value = onText,
+                    isError = !binaryOk,
+                    modifier = Modifier.weight(1f),
+                    numeric = true,
+                    onChange = {
+                        onText = it
+                        pushBinary()
+                    },
+                )
+                Field(
+                    label = "Apagado",
+                    value = offText,
+                    isError = !binaryOk,
+                    modifier = Modifier.weight(1f),
+                    numeric = true,
+                    onChange = {
+                        offText = it
+                        pushBinary()
+                    },
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TypeChip(
                 label = "Fader",
-                selected = channel.type == "fader",
+                selected = isFader,
                 modifier = Modifier.weight(1f),
                 onClick = { onDone(channel.copy(type = "fader")) },
             )
             TypeChip(
                 label = "Botón",
-                selected = channel.type == "button",
+                selected = !isFader,
                 modifier = Modifier.weight(1f),
                 onClick = { onDone(channel.copy(type = "button")) },
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(16.dp))
     }
 }
 

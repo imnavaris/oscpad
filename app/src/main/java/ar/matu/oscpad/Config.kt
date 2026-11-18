@@ -35,6 +35,8 @@ data class Channel(
     val type: String = "fader",
     val min: Float = 0f,
     val max: Float = 1f,
+    val onValue: Float = 1f,
+    val offValue: Float = 0f,
     val level: Float = 0.5f,
     val on: Boolean = false,
 )
@@ -42,7 +44,7 @@ data class Channel(
 fun Channel.address() = "/$name"
 
 fun Channel.current() = if (type == "button") {
-    if (on) max else min
+    if (on) onValue else offValue
 } else {
     min + (max - min) * level
 }
@@ -73,6 +75,8 @@ object ChannelStore {
                     type = if (type == "button") "button" else "fader",
                     min = o.optDouble("min", 0.0).toFloat(),
                     max = o.optDouble("max", 1.0).toFloat(),
+                    onValue = o.optDouble("onValue", 1.0).toFloat(),
+                    offValue = o.optDouble("offValue", 0.0).toFloat(),
                     level = o.optDouble("level", 0.5).toFloat(),
                     on = o.optBoolean("on", false),
                 )
@@ -92,6 +96,8 @@ object ChannelStore {
                     .put("type", ch.type)
                     .put("min", ch.min.toDouble())
                     .put("max", ch.max.toDouble())
+                    .put("onValue", ch.onValue.toDouble())
+                    .put("offValue", ch.offValue.toDouble())
                     .put("level", ch.level.toDouble())
                     .put("on", ch.on),
             )

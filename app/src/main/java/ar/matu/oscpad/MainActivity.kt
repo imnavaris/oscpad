@@ -61,18 +61,18 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val OscScheme = darkColorScheme(
-    primary = Color(0xFFFBBF24),
-    onPrimary = Color(0xFF0B0C10),
-    background = Color(0xFF090A0F),
-    onBackground = Color(0xFFE7E7EA),
-    surface = Color(0xFF090A0F),
-    onSurface = Color(0xFFE7E7EA),
-    surfaceVariant = Color(0xFF15161D),
-    onSurfaceVariant = Color(0xFF9A9AA5),
-    outline = Color(0xFF262730),
-    outlineVariant = Color(0xFF1B1C24),
-    error = Color(0xFFF87171),
-    onError = Color(0xFF0B0C10),
+    primary = Color(0xFF39FF14),
+    onPrimary = Color(0xFF0A0A0A),
+    background = Color(0xFF0A0A0A),
+    onBackground = Color(0xFFE2E2E2),
+    surface = Color(0xFF0A0A0A),
+    onSurface = Color(0xFFE2E2E2),
+    surfaceVariant = Color(0xFF141414),
+    onSurfaceVariant = Color(0xFF8A8A8A),
+    outline = Color(0xFF242424),
+    outlineVariant = Color(0xFF1A1A1A),
+    error = Color(0xFFFF5252),
+    onError = Color(0xFF0A0A0A),
 )
 
 private val Ease = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
-            MaterialTheme(colorScheme = OscScheme) {
+            MaterialTheme(colorScheme = OscScheme, typography = appTypography()) {
                 App()
             }
         }
@@ -334,6 +334,7 @@ private fun App() {
                     Text(
                         text = "${currentPage.coerceAtLeast(1)}/${channels.size}",
                         style = MaterialTheme.typography.labelSmall,
+                        fontFamily = Mono,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

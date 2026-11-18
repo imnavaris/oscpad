@@ -17,9 +17,16 @@ class ChannelTest {
     }
 
     @Test
-    fun buttonCurrentSendsMaxWhenOnAndMinWhenOff() {
-        val base = Channel(id = 1, name = "play", type = "button", min = 0f, max = 10f)
+    fun buttonCurrentSendsConfiguredBinaryValues() {
+        val base = Channel(id = 1, name = "play", type = "button", onValue = 10f, offValue = 2f)
         assertEquals(10f, base.copy(on = true).current(), 0.001f)
+        assertEquals(2f, base.copy(on = false).current(), 0.001f)
+    }
+
+    @Test
+    fun buttonDefaultsToOneAndZero() {
+        val base = Channel(id = 1, name = "play", type = "button")
+        assertEquals(1f, base.copy(on = true).current(), 0.001f)
         assertEquals(0f, base.copy(on = false).current(), 0.001f)
     }
 
