@@ -7,13 +7,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -26,9 +25,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
@@ -41,6 +39,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,7 +95,7 @@ private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val spacingPx = with(density) { 12.dp.toPx() }
+    val dividerPx = with(density) { 25.dp.toPx() }
     var net by remember { mutableStateOf(NetStore.load(context)) }
     var channels by remember { mutableStateOf(ChannelStore.load(context)) }
     var settingsOpen by remember { mutableStateOf(false) }
@@ -161,7 +160,7 @@ private fun App() {
     fun onTitleDrag(dx: Float) {
         if (cellWpx <= 0f) return
         dragTotalX += dx
-        moveDragged(dragOrigIdx + (dragTotalX / (cellWpx + spacingPx)).roundToInt())
+        moveDragged(dragOrigIdx + (dragTotalX / (cellWpx + dividerPx)).roundToInt())
     }
 
     fun onTitleDragEnd() {
@@ -179,10 +178,12 @@ private fun App() {
                 .fillMaxSize()
                 .safeDrawingPadding()
                 .imePadding()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(vertical = 16.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -220,10 +221,12 @@ private fun App() {
                     reveal.animateTo(1f, tween(240, easing = Ease))
                 }
                 Column(
-                    modifier = Modifier.graphicsLayer {
-                        alpha = reveal.value
-                        translationY = (1f - reveal.value) * 12.dp.toPx()
-                    },
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .graphicsLayer {
+                            alpha = reveal.value
+                            translationY = (1f - reveal.value) * 12.dp.toPx()
+                        },
                 ) {
                     SettingsPanel(
                         net = net,
@@ -247,69 +250,92 @@ private fun App() {
                         .weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(96.dp),
+                    Box(
+                        modifier = Modifier.clickable(onClick = ::addChannel),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Box(
-                            modifier = Modifier.clickable(onClick = ::addChannel),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = "Agregar canal",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(48.dp),
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Agregar canal",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(120.dp),
+                        )
+                    }
+                }
+            } else {
+                val listState = rememberLazyListState()
+                val currentPage by remember(channels) {
+                    derivedStateOf {
+                        val key = listState.layoutInfo.visibleItemsInfo
+                            .firstOrNull { it.key is Long }?.key
+                        channels.indexOfFirst { it.id == key } + 1
+                    }
+                }
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    state = listState,
+                    userScrollEnabled = dragId == null,
+                ) {
+                    channels.forEachIndexed { i, channel ->
+                        item(key = channel.id) {
+                            val idx = channels.indexOfFirst { it.id == channel.id }
+                            val active = dragId == channel.id
+                            val tx = if (active) {
+                                dragTotalX - (idx - dragOrigIdx) * (cellWpx + dividerPx)
+                            } else {
+                                0f
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillParentMaxWidth()
+                                    .fillParentMaxHeight()
+                                    .onSizeChanged { if (it.width > 0) cellWpx = it.width.toFloat() }
+                                    .graphicsLayer { translationX = tx }
+                                    .zIndex(if (active) 1f else 0f)
+                                    .animateItem(),
+                            ) {
+                                ChannelModule(
+                                    channel = channel,
+                                    taken = channels.map { it.name }.toSet() - channel.name,
+                                    onLive = ::live,
+                                    onDone = ::done,
+                                    onDelete = { remove(channel.id) },
+                                    onSend = ::send,
+                                    onTitleDragStart = { onTitleDragStart(channel) },
+                                    onTitleDrag = ::onTitleDrag,
+                                    onTitleDragEnd = ::onTitleDragEnd,
+                                )
+                            }
+                        }
+                        if (i < channels.lastIndex || channels.size < 8) {
+                            item(key = "div_${channel.id}") {
+                                DividerBar(modifier = Modifier.fillParentMaxHeight())
+                            }
+                        }
+                    }
+                    if (channels.size < 8) {
+                        item(key = "add") {
+                            AddPage(
+                                count = channels.size,
+                                onAdd = ::addChannel,
+                                modifier = Modifier
+                                    .fillParentMaxWidth()
+                                    .fillParentMaxHeight(),
                             )
                         }
                     }
                 }
-            } else {
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    userScrollEnabled = dragId == null,
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    items(channels, key = { it.id }) { channel ->
-                        val idx = channels.indexOfFirst { it.id == channel.id }
-                        val active = dragId == channel.id
-                        val tx = if (active) {
-                            dragTotalX - (idx - dragOrigIdx) * (cellWpx + spacingPx)
-                        } else {
-                            0f
-                        }
-                        Box(
-                            modifier = Modifier
-                                .width(240.dp)
-                                .onSizeChanged { if (it.width > 0) cellWpx = it.width.toFloat() }
-                                .graphicsLayer { translationX = tx }
-                                .zIndex(if (active) 1f else 0f)
-                                .animateItem(),
-                        ) {
-                            ChannelModule(
-                                channel = channel,
-                                taken = channels.map { it.name }.toSet() - channel.name,
-                                onLive = ::live,
-                                onDone = ::done,
-                                onDelete = { remove(channel.id) },
-                                onSend = ::send,
-                                onTitleDragStart = { onTitleDragStart(channel) },
-                                onTitleDrag = ::onTitleDrag,
-                                onTitleDragEnd = ::onTitleDragEnd,
-                            )
-                        }
-                    }
-                    if (channels.size < 8) {
-                        item {
-                            AddTile(
-                                count = channels.size,
-                                onAdd = ::addChannel,
-                                modifier = Modifier.fillParentMaxHeight(),
-                            )
-                        }
-                    }
+                    Text(
+                        text = "${currentPage.coerceAtLeast(1)}/${channels.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -317,28 +343,40 @@ private fun App() {
 }
 
 @Composable
-private fun AddTile(count: Int, onAdd: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.width(160.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+private fun DividerBar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.width(25.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
+        Box(
             modifier = Modifier
+                .width(2.dp)
                 .fillMaxHeight()
-                .clickable(onClick = onAdd)
-                .padding(vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = "Agregar canal",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(36.dp),
-            )
-            Spacer(Modifier.height(4.dp))
+                .padding(vertical = 32.dp)
+                .background(MaterialTheme.colorScheme.outline),
+        )
+    }
+}
+
+@Composable
+private fun AddPage(count: Int, onAdd: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.clickable(onClick = onAdd),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Agregar canal",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(120.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "$count/8",
                 style = MaterialTheme.typography.labelSmall,

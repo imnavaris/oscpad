@@ -1,6 +1,5 @@
 package ar.matu.oscpad
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -96,158 +97,157 @@ fun ChannelModule(
         focusManager.clearFocus()
     }
 
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 8.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .pointerInput(editing) {
-                            if (!editing) detectDragGesturesAfterLongPress(
-                                onDragStart = { onTitleDragStart() },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    onTitleDrag(dragAmount.x)
-                                },
-                                onDragEnd = { onTitleDragEnd() },
-                                onDragCancel = { onTitleDragEnd() },
-                            )
-                        },
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (editing) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = {
-                                name = it
-                                pushName()
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester),
-                            singleLine = true,
-                            isError = !nameOk,
-                            textStyle = MaterialTheme.typography.titleSmall,
-                            shape = RoundedCornerShape(8.dp),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Text,
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = { closeEditor() },
-                            ),
-                        )
-                    } else {
-                        Text(
-                            text = channel.name,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.clickable {
-                                name = channel.name
-                                editing = true
-                            },
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(28.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Eliminar",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .pointerInput(editing) {
+                        if (!editing) detectDragGesturesAfterLongPress(
+                            onDragStart = { onTitleDragStart() },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onTitleDrag(dragAmount.x)
+                            },
+                            onDragEnd = { onTitleDragEnd() },
+                            onDragCancel = { onTitleDragEnd() },
+                        )
+                    },
+                contentAlignment = Alignment.CenterStart,
             ) {
-                if (channel.type == "fader") {
-                    Fader(
-                        value = channel.level,
-                        onChange = { level ->
-                            val next = channel.copy(level = level)
-                            onLive(next)
-                            if (throttle.shouldSend()) onSend(next.address(), next.current())
+                if (editing) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = {
+                            name = it
+                            pushName()
                         },
-                        onRelease = { onDone(channel) },
                         modifier = Modifier
-                            .width(64.dp)
-                            .height(220.dp),
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        isError = !nameOk,
+                        textStyle = MaterialTheme.typography.titleSmall,
+                        shape = RoundedCornerShape(8.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { closeEditor() },
+                        ),
                     )
                 } else {
-                    ToggleControl(
-                        on = channel.on,
-                        onToggle = { state ->
-                            val next = channel.copy(on = state)
-                            onDone(next)
-                            onSend(next.address(), next.current())
+                    Text(
+                        text = channel.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.clickable {
+                            name = channel.name
+                            editing = true
                         },
-                        diameter = 96.dp,
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "${channel.address()}  ${formatValue(channel.current())}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(
-                    label = "Mín.",
-                    value = minText,
-                    isError = !minOk,
-                    modifier = Modifier.weight(1f),
-                    numeric = true,
-                    onChange = {
-                        minText = it
-                        pushRange()
-                    },
-                )
-                Field(
-                    label = "Máx.",
-                    value = maxText,
-                    isError = !maxOk,
-                    modifier = Modifier.weight(1f),
-                    numeric = true,
-                    onChange = {
-                        maxText = it
-                        pushRange()
-                    },
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TypeChip(
-                    label = "Fader",
-                    selected = channel.type == "fader",
-                    modifier = Modifier.weight(1f),
-                    onClick = { onDone(channel.copy(type = "fader")) },
-                )
-                TypeChip(
-                    label = "Botón",
-                    selected = channel.type == "button",
-                    modifier = Modifier.weight(1f),
-                    onClick = { onDone(channel.copy(type = "button")) },
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Eliminar",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (channel.type == "fader") {
+                Fader(
+                    value = channel.level,
+                    onChange = { level ->
+                        val next = channel.copy(level = level)
+                        onLive(next)
+                        if (throttle.shouldSend()) onSend(next.address(), next.current())
+                    },
+                    onRelease = { onDone(channel) },
+                    modifier = Modifier
+                        .width(64.dp)
+                        .fillMaxHeight(),
+                )
+            } else {
+                ToggleControl(
+                    on = channel.on,
+                    onToggle = { state ->
+                        val next = channel.copy(on = state)
+                        onDone(next)
+                        onSend(next.address(), next.current())
+                    },
+                    diameter = 120.dp,
+                )
+            }
+        }
+        Text(
+            text = "${channel.address()}  ${formatValue(channel.current())}",
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field(
+                label = "Mín.",
+                value = minText,
+                isError = !minOk,
+                modifier = Modifier.weight(1f),
+                numeric = true,
+                onChange = {
+                    minText = it
+                    pushRange()
+                },
+            )
+            Field(
+                label = "Máx.",
+                value = maxText,
+                isError = !maxOk,
+                modifier = Modifier.weight(1f),
+                numeric = true,
+                onChange = {
+                    maxText = it
+                    pushRange()
+                },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TypeChip(
+                label = "Fader",
+                selected = channel.type == "fader",
+                modifier = Modifier.weight(1f),
+                onClick = { onDone(channel.copy(type = "fader")) },
+            )
+            TypeChip(
+                label = "Botón",
+                selected = channel.type == "button",
+                modifier = Modifier.weight(1f),
+                onClick = { onDone(channel.copy(type = "button")) },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -266,7 +266,7 @@ private fun TypeChip(
         } else {
             MaterialTheme.colorScheme.surfaceVariant
         },
-        border = BorderStroke(
+        border = androidx.compose.foundation.BorderStroke(
             1.dp,
             if (selected) {
                 MaterialTheme.colorScheme.primary
