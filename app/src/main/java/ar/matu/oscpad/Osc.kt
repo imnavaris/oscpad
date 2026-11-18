@@ -8,15 +8,21 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 object Osc {
-    fun encodeFloat(address: String, value: Float): ByteArray {
+    fun encodeFloat(address: String, value: Float): ByteArray =
+        encodeFloats(address, floatArrayOf(value))
+
+    fun encodeFloats(address: String, values: FloatArray): ByteArray {
         require(address.startsWith('/')) { "OSC address must start with '/': $address" }
         val addressBytes = address.toByteArray(Charsets.US_ASCII)
         val padded = ((addressBytes.size + 1 + 3) / 4) * 4
-        val buffer = ByteBuffer.allocate(padded + 4 + 4).order(ByteOrder.BIG_ENDIAN)
+        val tags = ByteArray(values.size + 1) { if (it == 0) 0x2C else 0x66 }
+        val tagPadded = ((tags.size + 3) / 4) * 4
+        val buffer = ByteBuffer.allocate(padded + tagPadded + 4 * values.size).order(ByteOrder.BIG_ENDIAN)
         buffer.put(addressBytes)
         buffer.put(ByteArray(padded - addressBytes.size))
-        buffer.put(byteArrayOf(0x2C, 0x66, 0x00, 0x00))
-        buffer.putFloat(value)
+        buffer.put(tags)
+        buffer.put(ByteArray(tagPadded - tags.size))
+        values.forEach { buffer.putFloat(it) }
         return buffer.array()
     }
 }

@@ -25,6 +25,20 @@ class OscTest {
         assertArrayEquals(byteArrayOf(0x3F, 0x80.toByte(), 0x00, 0x00), bytes.takeLast(4).toByteArray())
     }
 
+    @Test
+    fun encodeFloatsWritesTwoFloatsWithFfTag() {
+        val bytes = Osc.encodeFloats("/xy", floatArrayOf(0.5f, 1.0f))
+        assertArrayEquals(
+            byteArrayOf(
+                0x2F, 0x78, 0x79, 0x00,
+                0x2C, 0x66, 0x66, 0x00,
+                0x3F, 0x00, 0x00, 0x00,
+                0x3F, 0x80.toByte(), 0x00, 0x00
+            ),
+            bytes
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun encodeFloatRejectsAddressWithoutSlash() {
         Osc.encodeFloat("fader", 0.5f)
