@@ -37,7 +37,6 @@ data class Channel(
     val max: Float = 1f,
     val level: Float = 0.5f,
     val on: Boolean = false,
-    val expanded: Boolean = true,
 )
 
 fun Channel.address() = "/$name"
@@ -76,7 +75,6 @@ object ChannelStore {
                     max = o.optDouble("max", 1.0).toFloat(),
                     level = o.optDouble("level", 0.5).toFloat(),
                     on = o.optBoolean("on", false),
-                    expanded = o.optBoolean("expanded", true),
                 )
             }
         } catch (e: Exception) {
@@ -95,8 +93,7 @@ object ChannelStore {
                     .put("min", ch.min.toDouble())
                     .put("max", ch.max.toDouble())
                     .put("level", ch.level.toDouble())
-                    .put("on", ch.on)
-                    .put("expanded", ch.expanded),
+                    .put("on", ch.on),
             )
         }
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)

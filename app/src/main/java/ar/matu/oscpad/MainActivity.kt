@@ -8,6 +8,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,9 +24,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,12 +50,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val OscScheme = darkColorScheme(
     primary = Color(0xFFFBBF24),
@@ -84,22 +90,43 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val spacingPx = with(density) { 12.dp.toPx() }
     var net by remember { mutableStateOf(NetStore.load(context)) }
     var channels by remember { mutableStateOf(ChannelStore.load(context)) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var dragId by remember { mutableStateOf<Long?>(null) }
+    var dragOrigIdx by remember { mutableStateOf(0) }
+    var dragTotalX by remember { mutableStateOf(0f) }
+    var cellWpx by remember { mutableStateOf(0f) }
     val sender = remember(net.host, net.port) { OscSender(net.host, net.port) }
 
     DisposableEffect(sender) {
         onDispose { sender.close() }
     }
 
-    fun persist(next: List<Channel>) {
-        channels = next
-        ChannelStore.save(context, next)
+    fun replace(list: List<Channel>, next: Channel) =
+        list.map { if (it.id == next.id) next else it }
+
+    fun live(next: Channel) {
+        channels = replace(channels, next)
+    }
+
+    fun done(next: Channel) {
+        val updated = replace(channels, next)
+        channels = updated
+        ChannelStore.save(context, updated)
+    }
+
+    fun remove(id: Long) {
+        val updated = channels.filter { it.id != id }
+        channels = updated
+        ChannelStore.save(context, updated)
     }
 
     fun send(address: String, value: Float) {
@@ -110,7 +137,37 @@ private fun App() {
     fun addChannel() {
         if (channels.size >= 8) return
         val id = ChannelStore.nextId(context)
-        persist(channels + Channel(id = id, name = "canal$id"))
+        val updated = channels + Channel(id = id, name = "canal$id")
+        channels = updated
+        ChannelStore.save(context, updated)
+    }
+
+    fun moveDragged(targetIdx: Int) {
+        val id = dragId ?: return
+        val list = channels.toMutableList()
+        val cur = list.indexOfFirst { it.id == id }
+        val target = targetIdx.coerceIn(0, list.lastIndex)
+        if (cur == -1 || cur == target) return
+        list.add(target, list.removeAt(cur))
+        channels = list
+    }
+
+    fun onTitleDragStart(channel: Channel) {
+        dragId = channel.id
+        dragOrigIdx = channels.indexOfFirst { it.id == channel.id }
+        dragTotalX = 0f
+    }
+
+    fun onTitleDrag(dx: Float) {
+        if (cellWpx <= 0f) return
+        dragTotalX += dx
+        moveDragged(dragOrigIdx + (dragTotalX / (cellWpx + spacingPx)).roundToInt())
+    }
+
+    fun onTitleDragEnd() {
+        dragId = null
+        dragTotalX = 0f
+        ChannelStore.save(context, channels)
     }
 
     Surface(
@@ -177,7 +234,10 @@ private fun App() {
                         onTestAll = {
                             channels.forEach { send(it.address(), it.current()) }
                         },
-                        onClearAll = { persist(emptyList()) },
+                        onClearAll = {
+                            channels = emptyList()
+                            ChannelStore.save(context, emptyList())
+                        },
                     )
                 }
             } else if (channels.isEmpty()) {
@@ -206,27 +266,48 @@ private fun App() {
                     }
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                LazyRow(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    userScrollEnabled = dragId == null,
                 ) {
                     items(channels, key = { it.id }) { channel ->
-                        ChannelModule(
-                            channel = channel,
-                            taken = channels.map { it.name }.toSet() - channel.name,
-                            onUpdate = { updated ->
-                                persist(channels.map { if (it.id == updated.id) updated else it })
-                            },
-                            onDelete = { persist(channels.filter { it.id != channel.id }) },
-                            onSend = ::send,
-                        )
+                        val idx = channels.indexOfFirst { it.id == channel.id }
+                        val active = dragId == channel.id
+                        val tx = if (active) {
+                            dragTotalX - (idx - dragOrigIdx) * (cellWpx + spacingPx)
+                        } else {
+                            0f
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(240.dp)
+                                .onSizeChanged { if (it.width > 0) cellWpx = it.width.toFloat() }
+                                .graphicsLayer { translationX = tx }
+                                .zIndex(if (active) 1f else 0f)
+                                .animateItem(),
+                        ) {
+                            ChannelModule(
+                                channel = channel,
+                                taken = channels.map { it.name }.toSet() - channel.name,
+                                onLive = ::live,
+                                onDone = ::done,
+                                onDelete = { remove(channel.id) },
+                                onSend = ::send,
+                                onTitleDragStart = { onTitleDragStart(channel) },
+                                onTitleDrag = ::onTitleDrag,
+                                onTitleDragEnd = ::onTitleDragEnd,
+                            )
+                        }
                     }
                     if (channels.size < 8) {
                         item {
-                            AddTile(count = channels.size, onAdd = ::addChannel)
+                            AddTile(
+                                count = channels.size,
+                                onAdd = ::addChannel,
+                                modifier = Modifier.fillParentMaxHeight(),
+                            )
                         }
                     }
                 }
@@ -236,17 +317,20 @@ private fun App() {
 }
 
 @Composable
-private fun AddTile(count: Int, onAdd: () -> Unit) {
+private fun AddTile(count: Int, onAdd: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
+        modifier = modifier.width(160.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(
             modifier = Modifier
+                .fillMaxHeight()
                 .clickable(onClick = onAdd)
                 .padding(vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             Icon(
                 imageVector = Icons.Filled.Add,
