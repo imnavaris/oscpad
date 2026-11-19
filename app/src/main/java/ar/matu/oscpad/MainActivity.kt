@@ -165,7 +165,6 @@ private fun App() {
     var tab by remember { mutableStateOf(1) }
     val history = remember { mutableStateListOf(1) }
     val activity = context as? Activity
-    var rangeClip by remember { mutableStateOf<List<Float>?>(null) }
     val activePreset = presets.find { it.id == activePresetId }
     val activeDirty = activePreset != null &&
         (activePreset.channels != channels || activePreset.net != net)
@@ -946,8 +945,6 @@ private fun App() {
                                     onSend = ::send,
                                     onSendMany = ::sendMany,
                                     onDuplicate = { duplicate(channel) },
-                                    rangeClip = rangeClip,
-                                    onCopyRange = { rangeClip = it },
                                     prefix = net.prefix,
                                 )
                             }

@@ -24,7 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FilterNone
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -106,8 +106,6 @@ fun ChannelModule(
     onSend: (String, Float) -> Unit,
     onSendMany: (String, FloatArray) -> Unit,
     onDuplicate: () -> Unit,
-    rangeClip: List<Float>?,
-    onCopyRange: (List<Float>) -> Unit,
     prefix: String,
 ) {
     val throttle = remember(channel.id) { Throttle(66) }
@@ -244,7 +242,7 @@ fun ChannelModule(
                     .semantics { contentDescription = "Duplicar canal" },
             ) {
                 Icon(
-                    imageVector = Icons.Filled.ContentCopy,
+                    imageVector = Icons.Filled.FilterNone,
                     contentDescription = "Duplicar canal",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -477,10 +475,9 @@ fun ChannelModule(
         }
         Spacer(Modifier.height(16.dp))
         if (channel.compCount() > 1 && type != "color") {
-            Row(
+            Column(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 val raws = if (type == "xy") {
                     channel.xyValues()
@@ -562,19 +559,6 @@ fun ChannelModule(
                         },
                     )
                 }
-                RangeClipRow(
-                    canCopy = minOk && maxOk,
-                    clipSize = 2,
-                    rangeClip = rangeClip,
-                    onCopy = { onCopyRange(listOf(minValue ?: 0f, maxValue ?: 1f)) },
-                    onPaste = { v ->
-                        if (v[0] < v[1]) {
-                            minText = v[0].toString()
-                            maxText = v[1].toString()
-                            pushRange()
-                        }
-                    },
-                )
             }
 
             "xy" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -628,31 +612,6 @@ fun ChannelModule(
                         },
                     )
                 }
-                RangeClipRow(
-                    canCopy = minOk && maxOk && min2Ok && max2Ok,
-                    clipSize = 4,
-                    rangeClip = rangeClip,
-                    onCopy = {
-                        onCopyRange(
-                            listOf(
-                                minValue ?: 0f,
-                                maxValue ?: 1f,
-                                min2Value ?: 0f,
-                                max2Value ?: 1f,
-                            ),
-                        )
-                    },
-                    onPaste = { v ->
-                        if (v[0] < v[1] && v[2] < v[3]) {
-                            minText = v[0].toString()
-                            maxText = v[1].toString()
-                            min2Text = v[2].toString()
-                            max2Text = v[3].toString()
-                            pushRange()
-                            pushRangeY()
-                        }
-                    },
-                )
             }
 
             "button" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -783,29 +742,6 @@ fun OverviewCompRow(
             fontFamily = Mono,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f),
         )
-    }
-}
-
-@Composable
-private fun RangeClipRow(
-    canCopy: Boolean,
-    clipSize: Int,
-    rangeClip: List<Float>?,
-    onCopy: () -> Unit,
-    onPaste: (List<Float>) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        TextButton(onClick = onCopy, enabled = canCopy) {
-            Text(text = "Copiar rango", style = MaterialTheme.typography.labelMedium)
-        }
-        if (rangeClip?.size == clipSize) {
-            TextButton(onClick = { onPaste(rangeClip) }) {
-                Text(text = "Pegar", style = MaterialTheme.typography.labelMedium)
-            }
-        }
     }
 }
 
