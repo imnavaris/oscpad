@@ -75,6 +75,10 @@ fun encodeBackup(backup: OscBackup): String = json.encodeToString(backup)
 
 private const val MAX_BACKUP_CHARS = 1_048_576
 
+fun logErr(tag: String, msg: String) {
+    System.err.println("oscpad:$tag:$msg")
+}
+
 fun decodeBackup(raw: String): OscBackup? {
     if (raw.length > MAX_BACKUP_CHARS) return null
     return try {
@@ -92,6 +96,7 @@ fun decodeBackup(raw: String): OscBackup? {
         },
     )
     } catch (e: IllegalArgumentException) {
+        logErr("backup", "decode:${e.message}")
         null
     }
 }
@@ -209,7 +214,8 @@ fun localIpv4(): String? {
             .flatMap { java.util.Collections.list(it.inetAddresses) }
             .firstOrNull { it is java.net.Inet4Address && !it.isLoopbackAddress && it.isSiteLocalAddress }
             ?.hostAddress
-    } catch (e: Exception) {
+    } catch (e: java.net.SocketException) {
+        logErr("net", "localIp:${e.message}")
         null
     }
 }
@@ -231,7 +237,8 @@ object ChannelStore {
         val raw = prefs.getString("channels", null) ?: return emptyList()
         val main = try {
             json.decodeFromString<List<Channel>>(raw)
-        } catch (e: Exception) {
+        } catch (e: IllegalArgumentException) {
+            logErr("canales", "load:${e.message}")
             null
         }
         if (main != null && main.isNotEmpty()) {
@@ -251,7 +258,8 @@ object ChannelStore {
                         it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader").clamped()
                     }
                 }
-            } catch (e2: Exception) {
+            } catch (e: IllegalArgumentException) {
+                logErr("canales", "bak:${e.message}")
             }
         }
         return main.orEmpty()
@@ -290,7 +298,8 @@ object PresetStore {
         val raw = prefs.getString("presets", null) ?: return emptyList()
         val main = try {
             json.decodeFromString<List<Preset>>(raw)
-        } catch (e: Exception) {
+        } catch (e: IllegalArgumentException) {
+            logErr("presets", "load:${e.message}")
             null
         }
         if (main != null && main.isNotEmpty()) {
@@ -302,7 +311,8 @@ object PresetStore {
                     prefs.getString("presets.bak", null) ?: return main.orEmpty(),
                 )
                 if (bak.isNotEmpty()) return bak
-            } catch (e2: Exception) {
+            } catch (e: IllegalArgumentException) {
+                logErr("presets", "bak:${e.message}")
             }
         }
         return main.orEmpty()

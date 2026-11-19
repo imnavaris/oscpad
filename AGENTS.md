@@ -13,9 +13,11 @@ Controlador OSC Android → TouchDesigner. Kotlin + Compose Material3, un módul
 ## Reglas duras
 
 - **Cero comentarios en código.** Ni `//`, ni KDoc. La explicación va en el commit o el chat.
+- **Nada de `catch (e: Exception)` ni catch silencioso.** Catch angosto (la excepción concreta que puede salir) y siempre `logErr(tag, msg)` (`Config.kt`, va a logcat y no rompe tests JVM). Excepciones: el catch del crash handler (el sistema ya loguea el crash) y errores que se muestran al usuario (además del snackbar/diálogo).
 - UI en español rioplatense. Tema oscuro propio (`OscScheme`) + claro (`OscLightScheme`) en MainActivity, selector en Ajustes.
 - Un commit por lote verde. Commits en español, formato `tipo: qué` + cuerpo con el porqué.
 - Versionado semántico en `app/build.gradle.kts` (versionCode +1 siempre): fixes menores → parche (`x.x.X`, ej. 1.2.0→1.2.1); cambios visibles o comportamiento nuevo → menor (`x.X.0`, ej. 1.2.1→1.3.0).
+- Cada cambio va al CHANGELOG.md (una entrada por versión, mismo commit o antes de pushear).
 - No agregar dependencias sin motivo (material-icons-extended ya está por los iconos Save/Edit).
 
 ## Arquitectura

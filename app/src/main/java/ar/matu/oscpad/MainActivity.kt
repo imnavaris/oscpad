@@ -281,6 +281,7 @@ private fun App(theme: String, onThemeChange: (String) -> Unit) {
                     if (tooBig) null else out.toString("UTF-8")
                 }
             } catch (e: java.io.IOException) {
+                logErr("backup", "import:${e.message}")
                 null
             }
             val backup = raw?.let { decodeBackup(it) }
@@ -315,7 +316,16 @@ private fun App(theme: String, onThemeChange: (String) -> Unit) {
                 launch(Dispatchers.Main) {
                     context.startActivity(Intent.createChooser(intent, "Exportar backup"))
                 }
-            } catch (e: Exception) {
+            } catch (e: java.io.IOException) {
+                logErr("backup", "export:${e.message}")
+                launch(Dispatchers.Main) {
+                    snackbarHostState.showSnackbar(
+                        message = "No se pudo exportar",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+            } catch (e: IllegalArgumentException) {
+                logErr("backup", "export:${e.message}")
                 launch(Dispatchers.Main) {
                     snackbarHostState.showSnackbar(
                         message = "No se pudo exportar",
@@ -373,6 +383,7 @@ private fun App(theme: String, onThemeChange: (String) -> Unit) {
 
     fun markSent(ok: Boolean) {
         val now = System.currentTimeMillis()
+        if (!ok && connOk != false) logErr("osc", "sin destino")
         if (ok != connOk || now - connAt > 250) {
             connOk = ok
             connAt = now

@@ -286,7 +286,8 @@ fun SettingsPanel(
         val context = LocalContext.current
         val version = try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        } catch (e: Exception) {
+        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            logErr("app", "version:${e.message}")
             "?"
         }
         Text(
