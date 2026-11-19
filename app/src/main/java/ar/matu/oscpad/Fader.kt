@@ -32,6 +32,7 @@ fun Fader(
         .width(64.dp)
         .height(320.dp),
     label: String = "Fader",
+    comma: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     val current by rememberUpdatedState(value)
@@ -41,7 +42,7 @@ fun Fader(
 
     Canvas(
         modifier = modifier
-            .semantics { contentDescription = "$label, valor ${formatValue(value)}" }
+            .semantics { contentDescription = "$label, valor ${formatValue(value, comma)}" }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { emit((1f - it.y / size.height).coerceIn(0f, 1f)) },

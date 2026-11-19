@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +43,12 @@ fun SettingsPanel(
     net: NetConfig,
     localIp: String,
     dim: Boolean,
+    decComma: Boolean,
+    theme: String,
+    channelCount: Int,
     onDimChange: (Boolean) -> Unit,
+    onDecCommaChange: (Boolean) -> Unit,
+    onThemeChange: (String) -> Unit,
     onChange: (NetConfig) -> Unit,
     onTestAll: () -> Unit,
     onClearAll: () -> Unit,
@@ -52,7 +58,7 @@ fun SettingsPanel(
     var host by remember { mutableStateOf(net.host) }
     var port by remember { mutableStateOf(net.port.toString()) }
     var prefixText by remember { mutableStateOf(net.prefix) }
-    var confirmClear by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
     var hostTouched by remember { mutableStateOf(false) }
     var portTouched by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -76,16 +82,17 @@ fun SettingsPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Field(
-            label = "Este celu",
+            label = "Este celular",
             value = localIp,
             isError = false,
             modifier = Modifier.fillMaxWidth(),
             readOnly = true,
             onChange = {},
         )
+        SectionTitle("Conexión")
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(
-                label = "IP",
+                label = "IP de la PC",
                 value = host,
                 isError = !hostOk,
                 modifier = Modifier
@@ -116,7 +123,7 @@ fun SettingsPanel(
             )
         }
         Field(
-            label = "Prefijo (opcional)",
+            label = "Prefijo de las direcciones (opcional)",
             value = prefixText,
             isError = false,
             modifier = Modifier
@@ -133,7 +140,7 @@ fun SettingsPanel(
             onClick = onTestAll,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(46.dp),
+                .height(56.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -146,6 +153,7 @@ fun SettingsPanel(
                 fontWeight = FontWeight.Medium,
             )
         }
+        SectionTitle("Datos")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -172,24 +180,48 @@ fun SettingsPanel(
             }
         }
         TextButton(
-            onClick = {
-                if (confirmClear) {
-                    confirmClear = false
-                    onClearAll()
-                } else {
-                    confirmClear = true
-                }
-            },
+            onClick = { showClearDialog = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = if (confirmClear) "Tocar de nuevo para borrar canales" else "Borrar canales",
+                text = "Borrar canales",
                 style = MaterialTheme.typography.labelLarge,
-                color = if (confirmClear) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (showClearDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearDialog = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showClearDialog = false
+                            onClearAll()
+                        },
+                    ) {
+                        Text(
+                            text = "Borrar todo",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 },
+                dismissButton = {
+                    TextButton(onClick = { showClearDialog = false }) {
+                        Text(
+                            text = "Cancelar",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                title = { Text("Borrar canales") },
+                text = {
+                    Text(
+                        text = "Se borran $channelCount canales. Podés deshacerlo después.",
+                    )
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                textContentColor = MaterialTheme.colorScheme.onSurface,
             )
         }
         val context = LocalContext.current
@@ -197,6 +229,48 @@ fun SettingsPanel(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         } catch (e: Exception) {
             "?"
+        }
+        SectionTitle("Pantalla")
+        Text(
+            text = "Tema",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("system" to "Sistema", "dark" to "Oscuro", "light" to "Claro").forEach { (key, label) ->
+                val selected = theme == key
+                TextButton(onClick = { onThemeChange(key) }) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
+        Text(
+            text = "Decimales",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(false to "Punto (0.50)", true to "Coma (0,50)").forEach { (key, label) ->
+                TextButton(onClick = { onDecCommaChange(key) }) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (decComma == key) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -211,12 +285,27 @@ fun SettingsPanel(
             Switch(checked = dim, onCheckedChange = onDimChange)
         }
         Text(
+            text = "Baja la pantalla al 5% para no encandilarte en el escenario.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
             text = "oscpad v$version",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
     }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
 }
 
 @Composable

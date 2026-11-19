@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,6 +50,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -58,10 +60,13 @@ import kotlin.math.roundToInt
 
 private val formatCache = mutableMapOf<Int, String>()
 
-fun formatValue(value: Float): String {
+fun formatValue(value: Float, comma: Boolean = false): String {
     if (formatCache.size > 2048) formatCache.clear()
-    val key = (value * 100).roundToInt()
-    return formatCache.getOrPut(key) { "%.2f".format(Locale.US, key / 100f) }
+    val key = (value * 100).roundToInt() * 2 + if (comma) 1 else 0
+    return formatCache.getOrPut(key) {
+        val dot = "%.2f".format(Locale.US, (key / 2) / 100f)
+        if (comma) dot.replace('.', ',') else dot
+    }
 }
 
 fun typeLabel(type: String) = when (type) {
@@ -77,7 +82,8 @@ fun cleanIntInput(raw: String) = raw.filter { it.isDigit() }
 
 fun cleanFloatInput(raw: String) = raw.filter { it.isDigit() || it == '.' || it == '-' }
 
-fun channelValueText(channel: Channel) = formatValue(channel.current())
+fun channelValueText(channel: Channel, comma: Boolean = false) =
+    formatValue(channel.current(), comma)
 
 private fun sensorHint(kind: String) = when (kind) {
     "gyroscope" -> "Velocidad de giro por eje"
@@ -108,6 +114,8 @@ fun ChannelModule(
     onDuplicate: () -> Unit,
     prefix: String,
     rev: Int,
+    decComma: Boolean,
+    pageLabel: String = "",
 ) {
     val throttle = remember(channel.id) { Throttle(66) }
     var name by remember(channel.id, rev) { mutableStateOf(channel.name) }
@@ -190,6 +198,15 @@ fun ChannelModule(
             .fillMaxSize()
             .padding(horizontal = 16.dp),
     ) {
+        if (pageLabel.isNotEmpty()) {
+            Text(
+                text = pageLabel,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = Mono,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -271,6 +288,7 @@ fun ChannelModule(
             when (type) {
                 "fader" -> Fader(
                     value = channel.level,
+                    comma = decComma,
                     onChange = { level ->
                         val next = channel.copy(level = level)
                         onLive(next)
@@ -290,8 +308,8 @@ fun ChannelModule(
                     ToggleControl(
                         on = channel.on,
                         hold = channel.hold,
-                        onLabel = formatValue(channel.onValue),
-                        offLabel = formatValue(channel.offValue),
+                        onLabel = formatValue(channel.onValue, decComma),
+                        offLabel = formatValue(channel.offValue, decComma),
                         onToggle = { state ->
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             val next = channel.copy(on = state)
@@ -419,18 +437,21 @@ fun ChannelModule(
                             value = r,
                             onChange = { push(channel.copy(level = it)) },
                             onDone = { release() },
+                            label = "Rojo",
                         )
                         ColorSlider(
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = Color(0xFF4ADE80),
                             value = g,
                             onChange = { push(channel.copy(level2 = it)) },
                             onDone = { release() },
+                            label = "Verde",
                         )
                         ColorSlider(
                             tint = Color(0xFF5AA9FF),
                             value = b,
                             onChange = { push(channel.copy(level3 = it)) },
                             onDone = { release() },
+                            label = "Azul",
                         )
                         Spacer(Modifier.height(8.dp))
                         Row(
@@ -457,7 +478,7 @@ fun ChannelModule(
                                         color = tint.copy(alpha = if (on) 1f else 0.35f),
                                     )
                                     Text(
-                                        text = formatValue(v),
+                                        text = formatValue(v, decComma),
                                         style = MaterialTheme.typography.displaySmall,
                                         fontFamily = Mono,
                                         color = MaterialTheme.colorScheme.onSurface.copy(
@@ -489,13 +510,14 @@ fun ChannelModule(
                         value = raw,
                         enabled = channel.compEnabled(i),
                         onToggle = { onDone(channel.toggleComp(i)) },
+                        comma = decComma,
                     )
                 }
             }
             Spacer(Modifier.height(4.dp))
         } else if (type != "color") {
             Text(
-                text = channelValueText(channel),
+                text = channelValueText(channel, decComma),
                 style = MaterialTheme.typography.displaySmall,
                 fontFamily = Mono,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -518,7 +540,7 @@ fun ChannelModule(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = "Mantener apretado",
+                    text = "Enclavado",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -528,6 +550,12 @@ fun ChannelModule(
                     onCheckedChange = { onDone(channel.copy(hold = it)) },
                 )
             }
+            Text(
+                text = "Apagado = el botón es momentáneo",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
         Spacer(Modifier.height(12.dp))
         when (type) {
@@ -685,12 +713,15 @@ private fun ColorSlider(
     value: Float,
     onChange: (Float) -> Unit,
     onDone: () -> Unit,
+    label: String,
 ) {
     Slider(
         value = value.coerceIn(0f, 1f),
         onValueChange = onChange,
         onValueChangeFinished = onDone,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = label },
         colors = SliderDefaults.colors(
             thumbColor = tint,
             activeTrackColor = tint.copy(alpha = 0.55f),
@@ -702,7 +733,7 @@ private fun ColorSlider(
 @Composable
 fun axisTint(i: Int): Color = when (i % 4) {
     0 -> Color(0xFFFF5252)
-    1 -> MaterialTheme.colorScheme.primary
+    1 -> Color(0xFF4ADE80)
     2 -> Color(0xFF5AA9FF)
     else -> MaterialTheme.colorScheme.onSurface
 }
@@ -714,11 +745,14 @@ fun OverviewCompRow(
     value: Float,
     enabled: Boolean,
     onToggle: () -> Unit,
+    comma: Boolean = false,
 ) {
     val haptics = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(
             onClickLabel = "Activar o silenciar componente",
             onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -730,12 +764,12 @@ fun OverviewCompRow(
             text = letter,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            fontFamily = Mono,
+            textDecoration = if (enabled) null else TextDecoration.LineThrough,
             color = tint.copy(alpha = if (enabled) 1f else 0.35f),
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = formatValue(value),
+            text = formatValue(value, comma),
             style = MaterialTheme.typography.headlineSmall,
             fontFamily = Mono,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f),

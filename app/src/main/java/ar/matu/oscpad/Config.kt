@@ -60,8 +60,8 @@ data class Channel(
 data class Preset(
     val id: Long,
     val name: String,
-    val channels: List<Channel>,
-    val net: NetConfig,
+    val channels: List<Channel> = emptyList(),
+    val net: NetConfig = NetConfig(),
 )
 
 @Serializable
@@ -73,23 +73,74 @@ data class OscBackup(
 
 fun encodeBackup(backup: OscBackup): String = json.encodeToString(backup)
 
-fun decodeBackup(raw: String): OscBackup? = try {
-    val backup = json.decodeFromString<OscBackup>(raw)
+private const val MAX_BACKUP_CHARS = 1_048_576
+
+fun decodeBackup(raw: String): OscBackup? {
+    if (raw.length > MAX_BACKUP_CHARS) return null
+    return try {
+        val backup = json.decodeFromString<OscBackup>(raw.trimStart { it == '﻿' })
+    val net = backup.net
+    if (net.port !in 1..65535 || net.host.isBlank()) return null
     backup.copy(
-        channels = backup.channels.map {
-            val t = it.type
-            it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
-        }.filter { it.name.isNotBlank() }.map { it.clamped() }.take(32),
-        presets = backup.presets.filter { it.name.isNotBlank() }.take(64),
+        channels = backup.channels.normalized(),
+        presets = backup.presets.filter { it.name.isNotBlank() }.take(64).map { preset ->
+            val pnet = preset.net
+            preset.copy(
+                channels = preset.channels.normalized(),
+                net = if (pnet.port in 1..65535 && pnet.host.isNotBlank()) pnet else NetConfig(),
+            )
+        },
     )
-} catch (e: Exception) {
-    null
+    } catch (e: IllegalArgumentException) {
+        null
+    }
+}
+
+private fun List<Channel>.normalized(): List<Channel> {
+    val seen = mutableSetOf<Long>()
+    return mapNotNull { channel ->
+        if (!seen.add(channel.id)) return@mapNotNull null
+        val t = channel.type
+        var n = channel.copy(
+            type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader",
+            name = sanitizeName(channel.name) ?: "canal",
+            rateMs = channel.rateMs.coerceAtLeast(16L),
+        ).clamped()
+        if (n.min > n.max) n = n.copy(min = n.max, max = n.min)
+        if (n.min2 > n.max2) n = n.copy(min2 = n.max2, max = n.min2)
+        n
+    }.take(32)
 }
 
 fun bumpCounter(current: Long, used: List<Long>): Long =
     maxOf(current, (used.maxOrNull() ?: 0L) + 1)
 
-private val json = Json { ignoreUnknownKeys = true }
+object UiStore {
+    private const val FILE = "oscpad"
+
+    fun loadDecComma(context: Context): Boolean =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .getBoolean("dec_comma", false)
+
+    fun saveDecComma(context: Context, comma: Boolean) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .edit().putBoolean("dec_comma", comma).apply()
+    }
+
+    fun loadTheme(context: Context): String =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .getString("theme", "system") ?: "system"
+
+    fun saveTheme(context: Context, theme: String) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .edit().putString("theme", theme).apply()
+    }
+}
+
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 fun Channel.xyValues(x: Float = level, y: Float = level2) = floatArrayOf(
     min + (max - min) * x,

@@ -67,7 +67,6 @@ fun PresetsPanel(
     var expandedIds by remember { mutableStateOf(setOf<Long>()) }
     var renamingId by remember { mutableStateOf<Long?>(null) }
     var renameText by remember { mutableStateOf("") }
-    var deleteTarget by remember { mutableStateOf<Preset?>(null) }
     var showNameDialog by remember { mutableStateOf(false) }
     var nameText by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
@@ -144,7 +143,7 @@ fun PresetsPanel(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Button(
-                    onClick = onGoChannels,
+                    onClick = { showNameDialog = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -156,9 +155,17 @@ fun PresetsPanel(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Creá tu primer preset",
+                        text = "Nuevo preset",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Medium,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                TextButton(onClick = onGoChannels) {
+                    Text(
+                        text = "Ir a canales",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -231,7 +238,7 @@ fun PresetsPanel(
                                     }
                                 },
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(48.dp)
                                     .semantics {
                                         contentDescription = if (expanded) {
                                             "Colapsar preset"
@@ -323,7 +330,7 @@ fun PresetsPanel(
                                 IconButton(
                                     onClick = { onOverwrite(preset) },
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(48.dp)
                                         .semantics { contentDescription = "Sobrescribir preset" },
                                 ) {
                                     Icon(
@@ -339,7 +346,7 @@ fun PresetsPanel(
                                         renameText = preset.name
                                     },
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(48.dp)
                                         .semantics { contentDescription = "Renombrar preset" },
                                 ) {
                                     Icon(
@@ -350,9 +357,12 @@ fun PresetsPanel(
                                     )
                                 }
                                 IconButton(
-                                    onClick = { deleteTarget = preset },
+                                    onClick = {
+                                        onDelete(preset.id)
+                                        expandedIds = expandedIds - preset.id
+                                    },
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(48.dp)
                                         .semantics { contentDescription = "Borrar preset" },
                                 ) {
                                     LabIcons.X(
@@ -419,19 +429,6 @@ fun PresetsPanel(
         }
     }
 
-    deleteTarget?.let { target ->
-        ConfirmDialog(
-            title = "Borrar preset",
-            body = "Se borra «${target.name}» para siempre.",
-            confirm = "Borrar",
-            onConfirm = {
-                onDelete(target.id)
-                expandedIds = expandedIds - target.id
-                deleteTarget = null
-            },
-            onDismiss = { deleteTarget = null },
-        )
-    }
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
@@ -480,38 +477,4 @@ fun PresetsPanel(
             textContentColor = MaterialTheme.colorScheme.onSurface,
         )
     }
-}
-
-@Composable
-private fun ConfirmDialog(
-    title: String,
-    body: String,
-    confirm: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    text = confirm,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = "Cancelar",
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        },
-        title = { Text(title) },
-        text = { Text(body) },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurface,
-    )
 }

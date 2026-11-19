@@ -212,10 +212,73 @@ class ChannelTest {
     }
 
     @Test
-    fun backupCapsChannelAndPresetCounts() {
+    fun formatValueCommaOption() {
+        assertEquals("0,50", formatValue(0.5f, comma = true))
+        assertEquals("0.50", formatValue(0.5f, comma = false))
+    }
+
+    @Test
+    fun backupCapsTopLevelChannels() {
         val many = (1..100).map { Channel(id = it.toLong(), name = "c$it") }
         val decoded = decodeBackup(encodeBackup(OscBackup(channels = many)))
         assertEquals(32, decoded?.channels?.size)
+    }
+
+    @Test
+    fun backupCapsChannelsInsidePresets() {
+        val many = (1..200).map { Channel(id = it.toLong(), name = "c$it") }
+        val backup = OscBackup(presets = listOf(Preset(id = 1, name = "p", channels = many)))
+        val decoded = decodeBackup(encodeBackup(backup))
+        assertEquals(32, decoded?.presets?.first()?.channels?.size)
+    }
+
+    @Test
+    fun backupToleratesPresetWithoutChannels() {
+        val decoded = decodeBackup("""{"presets":[{"id":1,"name":"p"}]}""")
+        assertEquals(1, decoded?.presets?.size)
+        assertEquals(0, decoded?.presets?.first()?.channels?.size)
+    }
+
+    @Test
+    fun backupToleratesExplicitNullType() {
+        val decoded = decodeBackup("""{"channels":[{"id":1,"name":"a","type":null}]}""")
+        assertEquals("fader", decoded?.channels?.first()?.type)
+    }
+
+    @Test
+    fun backupStripsBom() {
+        val decoded = decodeBackup("﻿{\"channels\":[{\"id\":1,\"name\":\"a\"}]}")
+        assertEquals(1, decoded?.channels?.size)
+    }
+
+    @Test
+    fun backupRejectsBadPort() {
+        assertNull(decodeBackup("""{"net":{"host":"h","port":-1},"channels":[]}"""))
+    }
+
+    @Test
+    fun backupSwapsInvertedRangesAndClampsRate() {
+        val decoded = decodeBackup(
+            """{"channels":[{"id":1,"name":"a","min":10.0,"max":-10.0,"rateMs":-5}]}""",
+        )
+        val c = decoded?.channels?.first()
+        assertEquals(-10f, c?.min ?: 0f, 0.001f)
+        assertEquals(10f, c?.max ?: 0f, 0.001f)
+        assertEquals(16L, c?.rateMs)
+    }
+
+    @Test
+    fun backupDedupesIdsAndSanitizesNames() {
+        val decoded = decodeBackup(
+            """{"channels":[{"id":5,"name":"a"},{"id":5,"name":"b"},{"id":6,"name":"x"}]}""",
+        )
+        assertEquals(listOf(5L, 6L), decoded?.channels?.map { it.id })
+        assertEquals("a", decoded?.channels?.first()?.name)
+    }
+
+    @Test
+    fun backupRejectsOversize() {
+        assertNull(decodeBackup(" ".padEnd(1_048_577, ' ')))
     }
 
     @Test

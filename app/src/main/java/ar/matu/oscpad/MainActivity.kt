@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.RowScope
@@ -45,11 +46,15 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -62,6 +67,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -110,9 +116,29 @@ private val OscScheme = darkColorScheme(
     onError = Color(0xFF0A0A0A),
 )
 
+private val OscLightScheme = lightColorScheme(
+    primary = Color(0xFF1A9E00),
+    onPrimary = Color(0xFFFFFFFF),
+    background = Color(0xFFF4F4F0),
+    onBackground = Color(0xFF1A1A1A),
+    surface = Color(0xFFF4F4F0),
+    onSurface = Color(0xFF1A1A1A),
+    surfaceVariant = Color(0xFFE4E4DE),
+    onSurfaceVariant = Color(0xFF5A5A55),
+    outline = Color(0xFFC9C9C2),
+    outlineVariant = Color(0xFFE0E0D8),
+    error = Color(0xFFC81E1E),
+    onError = Color(0xFFFFFFFF),
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val prefs = getSharedPreferences("oscpad", MODE_PRIVATE)
+        if (prefs.getString("theme", "system") == "light") {
+            window.setBackgroundDrawableResource(android.R.color.white)
+        } else {
+            window.setBackgroundDrawableResource(android.R.color.black)
+        }
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
@@ -126,7 +152,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
-            MaterialTheme(colorScheme = OscScheme, typography = appTypography()) {
+            val dark = when (
+                LocalContext.current
+                    .getSharedPreferences("oscpad", Context.MODE_PRIVATE)
+                    .getString("theme", "system")
+            ) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            MaterialTheme(
+                colorScheme = if (dark) OscScheme else OscLightScheme,
+                typography = appTypography(),
+            ) {
                 App()
             }
         }
@@ -138,6 +176,8 @@ private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var net by remember { mutableStateOf(NetStore.load(context)) }
+    var decComma by remember { mutableStateOf(UiStore.loadDecComma(context)) }
+    var theme by remember { mutableStateOf(UiStore.loadTheme(context)) }
     var channels by remember {
         mutableStateOf(ChannelStore.load(context).let { loaded ->
             val prefs = context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
@@ -204,7 +244,7 @@ private fun App() {
             activity?.finish()
         }
     }
-    var connOk by remember { mutableStateOf(true) }
+    var connOk by remember { mutableStateOf<Boolean?>(null) }
     var connAt by remember { mutableStateOf(0L) }
     var crash by remember {
         mutableStateOf(
@@ -245,7 +285,7 @@ private fun App() {
                     }
                     if (tooBig) null else out.toString("UTF-8")
                 }
-            } catch (e: Exception) {
+            } catch (e: java.io.IOException) {
                 null
             }
             val backup = raw?.let { decodeBackup(it) }
@@ -516,11 +556,74 @@ private fun App() {
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding(),
-        ) {
+            containerColor = MaterialTheme.colorScheme.background,
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        shape = RoundedCornerShape(12.dp),
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        actionColor = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    TabItem(0, tab, ::selectTab, "Inicio") {
+                        LabIcons.Grid(
+                            tint = if (tab == 0) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    TabItem(1, tab, ::selectTab, "Canales") {
+                        LabIcons.Sliders(
+                            tint = if (tab == 1) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    TabItem(2, tab, ::selectTab, "Presets") {
+                        LabIcons.Stack(
+                            tint = if (tab == 2) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    TabItem(3, tab, ::selectTab, "Ajustes") {
+                        LabIcons.Gear(
+                            tint = if (tab == 3) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -540,13 +643,23 @@ private fun App() {
                         modifier = Modifier
                             .size(8.dp)
                             .background(
-                                color = if (connOk) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.error
+                                color = when (connOk) {
+                                    true -> MaterialTheme.colorScheme.primary
+                                    false -> MaterialTheme.colorScheme.error
+                                    null -> MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                                 shape = CircleShape,
                             ),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = when (connOk) {
+                            true -> "ok"
+                            false -> "error"
+                            null -> "···"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
@@ -612,15 +725,11 @@ private fun App() {
                                             delay(15)
                                         }
                                         channels = to
-                                        net = preset.net
                                         ChannelStore.save(context, to)
-                                        NetStore.save(context, preset.net)
                                     }
                                 } else {
                                     channels = to
-                                    net = preset.net
                                     ChannelStore.save(context, to)
-                                    NetStore.save(context, preset.net)
                                 }
                             },
                             onDeselect = { activePresetId = null },
@@ -637,12 +746,29 @@ private fun App() {
                                 activePresetId = preset.id
                             },
                             onOverwrite = { preset ->
+                                val old = presets.find { it.id == preset.id }
                                 val updated = presets.map { p ->
                                     if (p.id == preset.id) p.copy(channels = channels, net = net) else p
                                 }
                                 presets = updated
                                 PresetStore.save(context, updated)
                                 activePresetId = preset.id
+                                if (old != null) {
+                                    scope.launch {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "Preset sobrescrito",
+                                            actionLabel = "Deshacer",
+                                            duration = SnackbarDuration.Short,
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            val back = presets.map { p ->
+                                                if (p.id == old.id) old else p
+                                            }
+                                            presets = back
+                                            PresetStore.save(context, back)
+                                        }
+                                    }
+                                }
                             },
                             onDelete = { id ->
                                 val idx = presets.indexOfFirst { it.id == id }
@@ -702,6 +828,9 @@ private fun App() {
                             net = net,
                             localIp = localIp,
                             dim = dim,
+                            decComma = decComma,
+                            theme = theme,
+                            channelCount = channels.size,
                             onDimChange = {
                                 dim = it
                                 context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
@@ -710,6 +839,15 @@ private fun App() {
                             onChange = {
                                 net = it
                                 NetStore.save(context, it)
+                            },
+                            onDecCommaChange = {
+                                decComma = it
+                                UiStore.saveDecComma(context, it)
+                            },
+                            onThemeChange = {
+                                theme = it
+                                UiStore.saveTheme(context, it)
+                                activity?.recreate()
                             },
                             onTestAll = {
                                 scope.launch {
@@ -729,9 +867,21 @@ private fun App() {
                                 }
                             },
                             onClearAll = {
+                                val backup = channels
                                 channels = emptyList()
                                 ChannelStore.save(context, emptyList())
                                 activePresetId = null
+                                scope.launch {
+                                    val result = snackbarHostState.showSnackbar(
+                                        message = "Canales borrados",
+                                        actionLabel = "Deshacer",
+                                        duration = SnackbarDuration.Long,
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        channels = backup
+                                        ChannelStore.save(context, backup)
+                                    }
+                                }
                             },
                             onExport = ::exportBackup,
                             onImport = { importLauncher.launch("application/json") },
@@ -856,7 +1006,7 @@ private fun App() {
                                                         } else {
                                                             scope.launch {
                                                                 snackbarHostState.showSnackbar(
-                                                                    message = "Deslizá la grilla primero",
+                                                                    message = "Mantené apretado para ordenar",
                                                                     duration = SnackbarDuration.Short,
                                                                 )
                                                             }
@@ -876,12 +1026,21 @@ private fun App() {
                                             },
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
-                                        Text(
-                                            text = channel.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = channel.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Filled.MoreVert,
+                                                contentDescription = "Arrastrar para ordenar",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
                                         Text(
                                             text = typeLabel(channel.type),
                                             style = MaterialTheme.typography.labelSmall,
@@ -909,6 +1068,7 @@ private fun App() {
                                                     tint = axisTint(i),
                                                     value = raw,
                                                     enabled = channel.compEnabled(i),
+                                                    comma = decComma,
                                                     onToggle = {
                                                         val next = channel.toggleComp(i)
                                                         channels = channels.map {
@@ -920,7 +1080,7 @@ private fun App() {
                                             }
                                         } else {
                                             Text(
-                                                text = channelValueText(channel),
+                                                text = channelValueText(channel, decComma),
                                                 style = MaterialTheme.typography.headlineSmall,
                                                 fontFamily = Mono,
                                                 color = MaterialTheme.colorScheme.onSurface,
@@ -980,6 +1140,12 @@ private fun App() {
                                     onDuplicate = { duplicate(channel) },
                                     prefix = net.prefix,
                                     rev = dataRev,
+                                    decComma = decComma,
+                                    pageLabel = if (channels.size > 1) {
+                                        "${i + 1} / ${channels.size}"
+                                    } else {
+                                        ""
+                                    },
                                 )
                             }
                         }
@@ -1007,16 +1173,6 @@ private fun App() {
             }
             }
 
-            SnackbarHost(hostState = snackbarHostState) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    shape = RoundedCornerShape(12.dp),
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    actionColor = MaterialTheme.colorScheme.primary,
-                )
-            }
-
             importCandidate?.let { backup ->
                 AlertDialog(
                     onDismissRequest = { importCandidate = null },
@@ -1038,7 +1194,7 @@ private fun App() {
                         ) {
                             Text(
                                 text = "Reemplazar",
-                                color = MaterialTheme.colorScheme.primary,
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     },
@@ -1046,7 +1202,7 @@ private fun App() {
                         TextButton(onClick = { importCandidate = null }) {
                             Text(
                                 text = "Cancelar",
-                                color = MaterialTheme.colorScheme.error,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     },
@@ -1094,52 +1250,8 @@ private fun App() {
                     textContentColor = MaterialTheme.colorScheme.onSurface,
                 )
             }
-
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                TabItem(0, tab, ::selectTab, "Inicio") {
-                    LabIcons.Grid(
-                        tint = if (tab == 0) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-                TabItem(1, tab, ::selectTab, "Canales") {
-                    LabIcons.Sliders(
-                        tint = if (tab == 1) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-                TabItem(2, tab, ::selectTab, "Presets") {
-                    LabIcons.Stack(
-                        tint = if (tab == 2) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-                TabItem(3, tab, ::selectTab, "Ajustes") {
-                    LabIcons.Gear(
-                        tint = if (tab == 3) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            }
         }
+    }
     }
 }
 
