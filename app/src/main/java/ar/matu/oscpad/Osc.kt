@@ -29,21 +29,28 @@ object Osc {
 
 class OscSender(private val host: String, private val port: Int) {
     private val socket = DatagramSocket()
+    private val lock = Any()
     private var address: InetAddress? = resolve()
     private var lastSent: ByteArray? = null
+    private var lastResolveMs = 0L
 
-    fun send(bytes: ByteArray): Boolean {
+    fun send(bytes: ByteArray): Boolean = synchronized(lock) {
         if (lastSent?.contentEquals(bytes) == true) return true
-        val target = address ?: resolve()?.also { address = it } ?: return false
+        val target = address ?: maybeResolve() ?: return false
         if (transmit(bytes, target)) {
             lastSent = bytes.copyOf()
             return true
         }
-        val retried = resolve() ?: return false
-        address = retried
-        if (!transmit(bytes, retried)) return false
-        lastSent = bytes.copyOf()
-        return true
+        address = null
+        return false
+    }
+
+    private fun maybeResolve(): InetAddress? {
+        address?.let { return it }
+        val now = System.currentTimeMillis()
+        if (now - lastResolveMs < 2000) return null
+        lastResolveMs = now
+        return resolve()?.also { address = it }
     }
 
     private fun transmit(bytes: ByteArray, target: InetAddress): Boolean = try {

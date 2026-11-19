@@ -44,11 +44,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -100,6 +102,17 @@ private val OscScheme = darkColorScheme(
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val prefs = getSharedPreferences("oscpad", MODE_PRIVATE)
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            try {
+                prefs.edit()
+                    .putString("last_crash", android.util.Log.getStackTraceString(error).take(2000))
+                    .apply()
+            } catch (e: Exception) {
+            }
+            defaultHandler?.uncaughtException(thread, error)
+        }
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
@@ -118,7 +131,7 @@ private fun App() {
     var channels by remember {
         mutableStateOf(ChannelStore.load(context).let { loaded ->
             val prefs = context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
-            if (prefs.getBoolean("order_migrated_v2", false)) {
+            if (prefs.getInt("order_version", 0) >= 3) {
                 loaded
             } else {
                 val sorted = loaded.sortedWith(
@@ -131,7 +144,7 @@ private fun App() {
                 if (sorted.map { it.id } != loaded.map { it.id }) {
                     ChannelStore.save(context, sorted)
                 }
-                prefs.edit().putBoolean("order_migrated_v2", true).apply()
+                prefs.edit().putInt("order_version", 3).apply()
                 sorted
             }
         })
@@ -147,6 +160,7 @@ private fun App() {
         if (i != tab) {
             tab = i
             history.add(i)
+            if (history.size > 50) history.removeFirst()
         }
     }
 
@@ -160,6 +174,12 @@ private fun App() {
     }
     var connOk by remember { mutableStateOf(true) }
     var connAt by remember { mutableStateOf(0L) }
+    var crash by remember {
+        mutableStateOf(
+            context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
+                .getString("last_crash", null),
+        )
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val sender = remember(net.host, net.port) { OscSender(net.host, net.port) }
@@ -185,6 +205,7 @@ private fun App() {
         val idx = channels.indexOfFirst { it.id == id }
         if (idx == -1) return
         val removed = channels[idx]
+        val beforeIds = channels.map { it.id }
         val updated = channels.filter { it.id != id }
         channels = updated
         ChannelStore.save(context, updated)
@@ -200,7 +221,12 @@ private fun App() {
             )
             if (result == SnackbarResult.ActionPerformed && channels.none { it.id == removed.id }) {
                 val back = channels.toMutableList()
-                back.add(idx.coerceIn(0, back.size), removed)
+                val at = if (channels.map { it.id } == beforeIds.filter { it != id }) {
+                    idx.coerceIn(0, back.size)
+                } else {
+                    back.size
+                }
+                back.add(at, removed)
                 channels = back
                 ChannelStore.save(context, back)
             }
@@ -295,12 +321,24 @@ private fun App() {
             .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "oscpad:live")
     }
 
+    var lastSubnetWarn by remember { mutableStateOf<String?>(null) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     if (!wifiLock.isHeld) wifiLock.acquire()
-                    localIp = localIpv4() ?: "?"
+                    val ip = localIpv4() ?: "?"
+                    localIp = ip
+                    if (!sameSubnet(ip, net.host) && lastSubnetWarn != ip + net.host) {
+                        lastSubnetWarn = ip + net.host
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "La red cambió: revisá la IP en Ajustes",
+                                duration = SnackbarDuration.Short,
+                            )
+                        }
+                    }
                 }
                 Lifecycle.Event.ON_PAUSE -> if (wifiLock.isHeld) wifiLock.release()
                 else -> Unit
@@ -699,6 +737,37 @@ private fun App() {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     actionColor = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            crash?.let { stack ->
+                AlertDialog(
+                    onDismissRequest = {},
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
+                                    .edit().remove("last_crash").apply()
+                                crash = null
+                            },
+                        ) {
+                            Text(
+                                text = "Borrar",
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    },
+                    title = { Text("La app se cerró sola") },
+                    text = {
+                        Text(
+                            text = stack,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = Mono,
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    textContentColor = MaterialTheme.colorScheme.onSurface,
                 )
             }
 

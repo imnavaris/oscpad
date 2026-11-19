@@ -147,23 +147,30 @@ object ChannelStore {
     private const val FILE = "oscpad"
 
     fun load(context: Context): List<Channel> {
-        val raw = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .getString("channels", null) ?: return emptyList()
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val raw = prefs.getString("channels", null) ?: return emptyList()
         return try {
             json.decodeFromString<List<Channel>>(raw).map {
                 val t = it.type
                 it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
             }
         } catch (e: Exception) {
-            emptyList()
+            try {
+                json.decodeFromString<List<Channel>>(
+                    prefs.getString("channels.bak", null) ?: return emptyList(),
+                )
+            } catch (e2: Exception) {
+                emptyList()
+            }
         }
     }
 
     fun save(context: Context, channels: List<Channel>) {
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .edit()
-            .putString("channels", json.encodeToString(channels))
-            .apply()
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        prefs.getString("channels", null)?.let { prev ->
+            prefs.edit().putString("channels.bak", prev).apply()
+        }
+        prefs.edit().putString("channels", json.encodeToString(channels)).apply()
     }
 
     fun nextId(context: Context): Long {
@@ -178,20 +185,27 @@ object PresetStore {
     private const val FILE = "oscpad"
 
     fun load(context: Context): List<Preset> {
-        val raw = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .getString("presets", null) ?: return emptyList()
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val raw = prefs.getString("presets", null) ?: return emptyList()
         return try {
             json.decodeFromString<List<Preset>>(raw)
         } catch (e: Exception) {
-            emptyList()
+            try {
+                json.decodeFromString<List<Preset>>(
+                    prefs.getString("presets.bak", null) ?: return emptyList(),
+                )
+            } catch (e2: Exception) {
+                emptyList()
+            }
         }
     }
 
     fun save(context: Context, presets: List<Preset>) {
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .edit()
-            .putString("presets", json.encodeToString(presets))
-            .apply()
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        prefs.getString("presets", null)?.let { prev ->
+            prefs.edit().putString("presets.bak", prev).apply()
+        }
+        prefs.edit().putString("presets", json.encodeToString(presets)).apply()
     }
 
     fun nextPresetId(context: Context): Long {

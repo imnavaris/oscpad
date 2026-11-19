@@ -120,6 +120,13 @@ class ChannelTest {
     }
 
     @Test
+    fun formatValueRoundsToTwoDecimals() {
+        assertEquals("0.50", formatValue(0.5f))
+        assertEquals("1.00", formatValue(1f))
+        assertEquals("0.57", formatValue(0.574f))
+    }
+
+    @Test
     fun maskDefaultsToAllEnabled() {
         val ch = Channel(id = 1, name = "xy1", type = "xy")
         assertEquals(15, ch.mask)

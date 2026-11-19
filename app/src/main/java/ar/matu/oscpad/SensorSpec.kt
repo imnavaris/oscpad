@@ -103,13 +103,6 @@ fun normalizeSensor(kind: String, axis: String, v: FloatArray, maxRange: Float):
             ((r / 100f).coerceIn(-1f, 1f) + 1f) / 2f
         }
         "light" -> (log10(1f + r) / log10(40001f)).coerceIn(0f, 1f)
-        "proximity" -> if (maxRange > 0f) {
-            (r / maxRange).coerceIn(0f, 1f)
-        } else if (r > 0f) {
-            1f
-        } else {
-            0f
-        }
         "pressure" -> ((r - 300f) / 800f).coerceIn(0f, 1f)
         else -> r.coerceIn(0f, 1f)
     }

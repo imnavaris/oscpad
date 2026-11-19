@@ -46,8 +46,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import java.util.Locale
+import kotlin.math.roundToInt
 
-fun formatValue(value: Float) = "%.2f".format(Locale.US, value)
+private val formatCache = mutableMapOf<Int, String>()
+
+fun formatValue(value: Float): String {
+    if (formatCache.size > 2048) formatCache.clear()
+    val key = (value * 100).roundToInt()
+    return formatCache.getOrPut(key) { "%.2f".format(Locale.US, key / 100f) }
+}
 
 fun typeLabel(type: String) = when (type) {
     "fader" -> "Fader"
@@ -62,24 +69,12 @@ fun cleanIntInput(raw: String) = raw.filter { it.isDigit() }
 
 fun cleanFloatInput(raw: String) = raw.filter { it.isDigit() || it == '.' || it == '-' }
 
-fun channelValueText(channel: Channel) = when (channel.type) {
-    "xy" -> channel.xyValues().let { "X ${formatValue(it[0])}  Y ${formatValue(it[1])}" }
-    "sensor" -> formatValue(channel.level)
-    else -> formatValue(channel.current())
-}
-
-private fun axisGloss(kind: String) = when (kind) {
-    "accelerometer" -> "x: inclinar costados · y: inclinar frente · magnitud: sacudida"
-    "gyroscope" -> "x/y/z: giro por eje · magnitud: giro total"
-    "magnetic_field" -> "x/y/z: campo por eje · magnitud: intensidad"
-    else -> ""
-}
+fun channelValueText(channel: Channel) = formatValue(channel.current())
 
 private fun sensorHint(kind: String) = when (kind) {
     "gyroscope" -> "Velocidad de giro por eje"
     "magnetic_field" -> "Campo magnético (brújula)"
     "light" -> "Luz ambiente (lux)"
-    "proximity" -> "Cerca o lejos (cm)"
     "pressure" -> "Presión atmosférica (hPa)"
     else -> "Inclinación y movimiento del celu"
 }
@@ -645,7 +640,6 @@ private fun SensorGlyph(kind: String, tint: Color) {
         "gyroscope" -> LabIcons.Gyro(tint = tint, modifier = modifier)
         "magnetic_field" -> LabIcons.Magnet(tint = tint, modifier = modifier)
         "light" -> LabIcons.Light(tint = tint, modifier = modifier)
-        "proximity" -> LabIcons.Prox(tint = tint, modifier = modifier)
         "pressure" -> LabIcons.Pressure(tint = tint, modifier = modifier)
         else -> LabIcons.Accel(tint = tint, modifier = modifier)
     }
