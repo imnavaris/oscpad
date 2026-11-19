@@ -153,6 +153,65 @@ fun SettingsPanel(
                 fontWeight = FontWeight.Medium,
             )
         }
+        SectionTitle("Pantalla")
+        Text(
+            text = "Tema",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("dark" to "Oscuro", "light" to "Claro").forEach { (key, label) ->
+                val selected = theme == key
+                TextButton(onClick = { onThemeChange(key) }) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
+        Text(
+            text = "Decimales",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(false to "Punto (0.50)", true to "Coma (0,50)").forEach { (key, label) ->
+                TextButton(onClick = { onDecCommaChange(key) }) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (decComma == key) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Brillo bajo",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = dim, onCheckedChange = onDimChange)
+        }
+        Text(
+            text = "Baja la pantalla al 5% para no encandilarte en el escenario.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         SectionTitle("Datos")
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -230,65 +289,6 @@ fun SettingsPanel(
         } catch (e: Exception) {
             "?"
         }
-        SectionTitle("Pantalla")
-        Text(
-            text = "Tema",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("system" to "Sistema", "dark" to "Oscuro", "light" to "Claro").forEach { (key, label) ->
-                val selected = theme == key
-                TextButton(onClick = { onThemeChange(key) }) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-        }
-        Text(
-            text = "Decimales",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(false to "Punto (0.50)", true to "Coma (0,50)").forEach { (key, label) ->
-                TextButton(onClick = { onDecCommaChange(key) }) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (decComma == key) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Brillo bajo",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(checked = dim, onCheckedChange = onDimChange)
-        }
-        Text(
-            text = "Baja la pantalla al 5% para no encandilarte en el escenario.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Text(
             text = "oscpad v$version",
             style = MaterialTheme.typography.labelSmall,

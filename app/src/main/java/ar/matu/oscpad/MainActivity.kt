@@ -134,7 +134,7 @@ private val OscLightScheme = lightColorScheme(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val prefs = getSharedPreferences("oscpad", MODE_PRIVATE)
-        if (prefs.getString("theme", "system") == "light") {
+        if (prefs.getString("theme", "dark") == "light") {
             window.setBackgroundDrawableResource(android.R.color.white)
         } else {
             window.setBackgroundDrawableResource(android.R.color.black)
@@ -152,32 +152,27 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
-            val dark = when (
-                LocalContext.current
-                    .getSharedPreferences("oscpad", Context.MODE_PRIVATE)
-                    .getString("theme", "system")
-            ) {
-                "light" -> false
-                "dark" -> true
-                else -> isSystemInDarkTheme()
-            }
+            val initialTheme = prefs.getString("theme", "dark") ?: "dark"
+            var theme by remember { mutableStateOf(initialTheme) }
             MaterialTheme(
-                colorScheme = if (dark) OscScheme else OscLightScheme,
+                colorScheme = if (theme == "light") OscLightScheme else OscScheme,
                 typography = appTypography(),
             ) {
-                App()
+                App(
+                    theme = theme,
+                    onThemeChange = { theme = it },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun App() {
+private fun App(theme: String, onThemeChange: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var net by remember { mutableStateOf(NetStore.load(context)) }
     var decComma by remember { mutableStateOf(UiStore.loadDecComma(context)) }
-    var theme by remember { mutableStateOf(UiStore.loadTheme(context)) }
     var channels by remember {
         mutableStateOf(ChannelStore.load(context).let { loaded ->
             val prefs = context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
@@ -632,10 +627,15 @@ private fun App() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "oscpad",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = when (tab) {
+                        0 -> "oscpad"
+                        1 -> "Canales"
+                        2 -> "Presets"
+                        else -> "Ajustes"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Medium,
-                    letterSpacing = 1.sp,
+                    letterSpacing = if (tab == 0) 1.sp else 0.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -661,12 +661,14 @@ private fun App() {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "${net.host}:${net.port}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (tab == 0) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "${net.host}:${net.port}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -845,9 +847,8 @@ private fun App() {
                                 UiStore.saveDecComma(context, it)
                             },
                             onThemeChange = {
-                                theme = it
                                 UiStore.saveTheme(context, it)
-                                activity?.recreate()
+                                onThemeChange(it)
                             },
                             onTestAll = {
                                 scope.launch {

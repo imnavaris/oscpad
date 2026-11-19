@@ -129,7 +129,7 @@ object UiStore {
 
     fun loadTheme(context: Context): String =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .getString("theme", "system") ?: "system"
+            .getString("theme", "dark") ?: "dark"
 
     fun saveTheme(context: Context, theme: String) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
