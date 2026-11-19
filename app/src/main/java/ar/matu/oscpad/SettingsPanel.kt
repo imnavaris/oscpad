@@ -16,6 +16,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +41,8 @@ import androidx.compose.ui.unit.dp
 fun SettingsPanel(
     net: NetConfig,
     localIp: String,
+    dim: Boolean,
+    onDimChange: (Boolean) -> Unit,
     onChange: (NetConfig) -> Unit,
     onTestAll: () -> Unit,
     onClearAll: () -> Unit,
@@ -159,6 +164,18 @@ fun SettingsPanel(
         } catch (e: Exception) {
             "?"
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Brillo bajo",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = dim, onCheckedChange = onDimChange)
+        }
         Text(
             text = "oscpad v$version",
             style = MaterialTheme.typography.labelSmall,
@@ -176,6 +193,7 @@ fun Field(
     modifier: Modifier = Modifier,
     numeric: Boolean = false,
     readOnly: Boolean = false,
+    next: FocusRequester? = null,
     onChange: (String) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
@@ -192,9 +210,12 @@ fun Field(
         shape = RoundedCornerShape(12.dp),
         keyboardOptions = KeyboardOptions(
             keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text,
-            imeAction = ImeAction.Done,
+            imeAction = if (next != null) ImeAction.Next else ImeAction.Done,
         ),
-        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        keyboardActions = KeyboardActions(
+            onNext = { next?.requestFocus() },
+            onDone = { focusManager.clearFocus() },
+        ),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = MaterialTheme.colorScheme.onSurface,
             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,

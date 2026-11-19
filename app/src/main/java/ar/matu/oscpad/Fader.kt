@@ -1,6 +1,7 @@
 package ar.matu.oscpad
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,12 @@ fun Fader(
 
     Canvas(
         modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { emit((1f - it.y / size.height).coerceIn(0f, 1f)) },
+                    onDoubleTap = { emit(0.5f) },
+                )
+            }
             .pointerInput(Unit) {
                 var base = 0f
                 var travel = 0f

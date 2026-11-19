@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -40,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +52,7 @@ import androidx.compose.ui.zIndex
 fun PresetsPanel(
     presets: List<Preset>,
     activeId: Long?,
+    activeDirty: Boolean,
     onSelect: (Preset) -> Unit,
     onDeselect: () -> Unit,
     onSaveNew: (String) -> Unit,
@@ -65,11 +68,17 @@ fun PresetsPanel(
     var deleteTarget by remember { mutableStateOf<Preset?>(null) }
     var showNameDialog by remember { mutableStateOf(false) }
     var nameText by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf("") }
     var dragId by remember { mutableStateOf<Long?>(null) }
     var dragOffsetY by remember { mutableStateOf(0f) }
     val heights = remember { mutableMapOf<Long, Int>() }
     var dragging by remember { mutableStateOf<List<Preset>?>(null) }
-    val shown = dragging ?: presets
+    val query = filter.trim()
+    val listed = if (query.isEmpty()) {
+        dragging ?: presets
+    } else {
+        presets.filter { it.name.contains(query, ignoreCase = true) }
+    }
 
     fun finishDrag(commit: Boolean) {
         val order = dragging
@@ -152,11 +161,28 @@ fun PresetsPanel(
                 }
             }
         } else {
+            if (presets.size > 5) {
+                OutlinedTextField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = {
+                        Text(
+                            text = "Filtrar",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    shape = RoundedCornerShape(12.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 userScrollEnabled = dragId == null,
             ) {
-                items(shown, key = { it.id }) { preset ->
+                items(listed, key = { it.id }) { preset ->
                     val active = preset.id == activeId
                     val expanded = preset.id in expandedIds
                     val rotation by animateFloatAsState(
@@ -173,9 +199,10 @@ fun PresetsPanel(
                                 translationY = if (dragId == preset.id) dragOffsetY else 0f
                             }
                             .zIndex(if (dragId == preset.id) 1f else 0f)
-                            .pointerInput(preset.id) {
+                            .pointerInput(preset.id, filter.isBlank()) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
+                                        if (filter.isNotBlank()) return@detectDragGesturesAfterLongPress
                                         dragging = presets
                                         dragId = preset.id
                                         dragOffsetY = 0f
@@ -254,16 +281,29 @@ fun PresetsPanel(
                                             }
                                         },
                                 ) {
-                                    Text(
-                                        text = preset.name,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Medium,
-                                        color = if (active) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        },
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = preset.name,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (active) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                        )
+                                        if (active && activeDirty) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Spacer(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .background(
+                                                        color = Color(0xFFFFB020),
+                                                        shape = CircleShape,
+                                                    ),
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = "${preset.channels.size} canales",
                                         style = MaterialTheme.typography.labelMedium,

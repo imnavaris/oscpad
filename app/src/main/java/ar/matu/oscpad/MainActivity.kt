@@ -2,6 +2,7 @@ package ar.matu.oscpad
 
 import android.app.Activity
 import android.content.Context
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import android.net.wifi.WifiManager
 import android.os.Bundle
@@ -45,6 +46,8 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -73,6 +76,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -155,6 +159,25 @@ private fun App() {
     var tab by remember { mutableStateOf(1) }
     val history = remember { mutableStateListOf(1) }
     val activity = context as? Activity
+    var rangeClip by remember { mutableStateOf<List<Float>?>(null) }
+    val activePreset = presets.find { it.id == activePresetId }
+    val activeDirty = activePreset != null &&
+        (activePreset.channels != channels || activePreset.net != net)
+    var dim by remember {
+        mutableStateOf(
+            context.getSharedPreferences("oscpad", Context.MODE_PRIVATE).getBoolean("dim", false),
+        )
+    }
+
+    DisposableEffect(dim) {
+        val window = activity?.window
+        if (window != null) {
+            val attrs = window.attributes
+            attrs.screenBrightness = if (dim) 0.05f else -1f
+            window.attributes = attrs
+        }
+        onDispose { }
+    }
 
     fun selectTab(i: Int) {
         if (i != tab) {
@@ -235,26 +258,38 @@ private fun App() {
 
     fun markSent(ok: Boolean) {
         val now = System.currentTimeMillis()
-        if (ok != connOk || now - connAt > 1000) {
+        if (ok != connOk || now - connAt > 250) {
             connOk = ok
             connAt = now
         }
     }
 
+    suspend fun sendNow(address: String, value: Float): Boolean {
+        if (!address.startsWith('/')) return false
+        val ok = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            sender.send(Osc.encodeFloat(address, value))
+        }
+        markSent(ok)
+        return ok
+    }
+
+    suspend fun sendManyNow(address: String, values: FloatArray): Boolean {
+        if (!address.startsWith('/')) return false
+        val ok = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            sender.send(Osc.encodeFloats(address, values))
+        }
+        markSent(ok)
+        return ok
+    }
+
     fun send(address: String, value: Float) {
         if (!address.startsWith('/')) return
-        scope.launch(Dispatchers.IO) {
-            val ok = sender.send(Osc.encodeFloat(address, value))
-            launch(Dispatchers.Main) { markSent(ok) }
-        }
+        scope.launch { sendNow(address, value) }
     }
 
     fun sendMany(address: String, values: FloatArray) {
         if (!address.startsWith('/')) return
-        scope.launch(Dispatchers.IO) {
-            val ok = sender.send(Osc.encodeFloats(address, values))
-            launch(Dispatchers.Main) { markSent(ok) }
-        }
+        scope.launch { sendManyNow(address, values) }
     }
 
     fun addChannel() {
@@ -263,6 +298,37 @@ private fun App() {
         val updated = channels + Channel(id = id, name = "canal$id")
         channels = updated
         ChannelStore.save(context, updated)
+        scope.launch {
+            listState.animateScrollToItem((updated.size - 1) * 2)
+        }
+    }
+
+    fun addDemo() {
+        if (channels.isNotEmpty()) return
+        val demo = listOf(
+            Channel(id = ChannelStore.nextId(context), name = "fader1"),
+            Channel(id = ChannelStore.nextId(context), name = "boton1", type = "button"),
+            Channel(id = ChannelStore.nextId(context), name = "xy1", type = "xy"),
+        )
+        channels = demo
+        ChannelStore.save(context, demo)
+        selectTab(1)
+    }
+
+    fun duplicate(channel: Channel) {
+        if (channels.size >= 8) return
+        var base = channel.name + "_2"
+        var n = 2
+        val names = channels.map { it.name }.toSet()
+        while (base in names) {
+            n++
+            base = channel.name + "_$n"
+        }
+        val copy = channel.copy(id = ChannelStore.nextId(context), name = base)
+        val updated = channels + copy
+        channels = updated
+        ChannelStore.save(context, updated)
+        activePresetId = null
         scope.launch {
             listState.animateScrollToItem((updated.size - 1) * 2)
         }
@@ -444,10 +510,34 @@ private fun App() {
                                 activePresetId = preset.id
                             },
                             onDelete = { id ->
-                                val updated = presets.filter { it.id != id }
-                                presets = updated
-                                PresetStore.save(context, updated)
-                                if (activePresetId == id) activePresetId = null
+                                val idx = presets.indexOfFirst { it.id == id }
+                                val target = presets.find { it.id == id }
+                                if (target != null) {
+                                    val beforeIds = presets.map { it.id }
+                                    val updated = presets.filter { it.id != id }
+                                    presets = updated
+                                    PresetStore.save(context, updated)
+                                    if (activePresetId == id) activePresetId = null
+                                    scope.launch {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "Preset borrado",
+                                            actionLabel = "Deshacer",
+                                            duration = SnackbarDuration.Indefinite,
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed &&
+                                            presets.none { it.id == id }) {
+                                            val back = presets.toMutableList()
+                                            val at = if (presets.map { it.id } == beforeIds.filter { it != id }) {
+                                                idx.coerceIn(0, back.size)
+                                            } else {
+                                                back.size
+                                            }
+                                            back.add(at, target)
+                                            presets = back
+                                            PresetStore.save(context, back)
+                                        }
+                                    }
+                                }
                             },
                             onRename = { id, name ->
                                 val updated = presets.map { p ->
@@ -467,6 +557,7 @@ private fun App() {
                                 selectTab(1)
                                 if (channels.isEmpty()) addChannel()
                             },
+                            activeDirty = activeDirty,
                         )
                     }
                     3 -> {
@@ -475,16 +566,31 @@ private fun App() {
                             SettingsPanel(
                             net = net,
                             localIp = localIp,
+                            dim = dim,
+                            onDimChange = {
+                                dim = it
+                                context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
+                                    .edit().putBoolean("dim", it).apply()
+                            },
                             onChange = {
                                 net = it
                                 NetStore.save(context, it)
                             },
-                            onTestAll = {    channels.forEach {
-                                    if (it.compCount() > 1) {
-                                        sendMany(it.address(), it.outputValues())
-                                    } else {
-                                        send(it.address(), it.current())
+                            onTestAll = {
+                                scope.launch {
+                                    var ok = 0
+                                    channels.forEach {
+                                        val sent = if (it.compCount() > 1) {
+                                            sendManyNow(it.address(), it.outputValues())
+                                        } else {
+                                            sendNow(it.address(), it.current())
+                                        }
+                                        if (sent) ok++
                                     }
+                                    snackbarHostState.showSnackbar(
+                                        message = "$ok/${channels.size} enviados",
+                                        duration = SnackbarDuration.Short,
+                                    )
                                 }
                             },
                             onClearAll = {
@@ -539,15 +645,39 @@ private fun App() {
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text(
-                                    text = "Sin canales: creá uno en Canales",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Sin canales: creá uno en Canales",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.height(16.dp))
+                                    Button(
+                                        onClick = ::addDemo,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        ),
+                                    ) {
+                                        Text(
+                                            text = "Crear demo",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = "fader + botón + XY para probar",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         } else {
+                            val portrait = LocalConfiguration.current.orientation ==
+                                Configuration.ORIENTATION_PORTRAIT
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
+                                columns = GridCells.Fixed(if (portrait) 2 else 4),
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -585,6 +715,13 @@ private fun App() {
                                                                 gridDragId = channel.id
                                                                 gridDragOffset = Offset.Zero
                                                                 gridDragFrom = channels.indexOfFirst { it.id == channel.id }
+                                                            }
+                                                        } else {
+                                                            scope.launch {
+                                                                snackbarHostState.showSnackbar(
+                                                                    message = "Deslizá la grilla primero",
+                                                                    duration = SnackbarDuration.Short,
+                                                                )
                                                             }
                                                         }
                                                     },
@@ -703,6 +840,9 @@ private fun App() {
                                     onDelete = { remove(channel.id) },
                                     onSend = ::send,
                                     onSendMany = ::sendMany,
+                                    onDuplicate = { duplicate(channel) },
+                                    rangeClip = rangeClip,
+                                    onCopyRange = { rangeClip = it },
                                 )
                             }
                         }

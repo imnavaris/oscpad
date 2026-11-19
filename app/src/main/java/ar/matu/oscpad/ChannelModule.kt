@@ -20,14 +20,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,6 +101,9 @@ fun ChannelModule(
     onDelete: () -> Unit,
     onSend: (String, Float) -> Unit,
     onSendMany: (String, FloatArray) -> Unit,
+    onDuplicate: () -> Unit,
+    rangeClip: List<Float>?,
+    onCopyRange: (List<Float>) -> Unit,
 ) {
     val throttle = remember(channel.id) { Throttle(66) }
     var name by remember(channel.id) { mutableStateOf(channel.name) }
@@ -110,6 +117,9 @@ fun ChannelModule(
     var editing by remember(channel.id) { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
+    val maxFocus = remember { FocusRequester() }
+    val max2Focus = remember { FocusRequester() }
+    val offFocus = remember { FocusRequester() }
 
     LaunchedEffect(editing) {
         if (editing) focusRequester.requestFocus()
@@ -221,6 +231,17 @@ fun ChannelModule(
                         },
                     )
                 }
+            }
+            IconButton(
+                onClick = onDuplicate,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = "Duplicar canal",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
             }
             IconButton(
                 onClick = onDelete,
@@ -503,27 +524,43 @@ fun ChannelModule(
         }
         Spacer(Modifier.height(12.dp))
         when (type) {
-            "fader" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(
-                    label = "Mín.",
-                    value = minText,
-                    isError = !minOk,
-                    modifier = Modifier.weight(1f),
-                    numeric = true,
-                    onChange = {
-                        minText = cleanFloatInput(it)
-                        pushRange()
-                    },
-                )
-                Field(
-                    label = "Máx.",
-                    value = maxText,
-                    isError = !maxOk,
-                    modifier = Modifier.weight(1f),
-                    numeric = true,
-                    onChange = {
-                        maxText = cleanFloatInput(it)
-                        pushRange()
+            "fader" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(
+                        label = "Mín.",
+                        value = minText,
+                        isError = !minOk,
+                        modifier = Modifier.weight(1f),
+                        numeric = true,
+                        next = maxFocus,
+                        onChange = {
+                            minText = cleanFloatInput(it)
+                            pushRange()
+                        },
+                    )
+                    Field(
+                        label = "Máx.",
+                        value = maxText,
+                        isError = !maxOk,
+                        modifier = Modifier.weight(1f).focusRequester(maxFocus),
+                        numeric = true,
+                        onChange = {
+                            maxText = cleanFloatInput(it)
+                            pushRange()
+                        },
+                    )
+                }
+                RangeClipRow(
+                    canCopy = minOk && maxOk,
+                    clipSize = 2,
+                    rangeClip = rangeClip,
+                    onCopy = { onCopyRange(listOf(minValue ?: 0f, maxValue ?: 1f)) },
+                    onPaste = { v ->
+                        if (v[0] < v[1]) {
+                            minText = v[0].toString()
+                            maxText = v[1].toString()
+                            pushRange()
+                        }
                     },
                 )
             }
@@ -536,6 +573,7 @@ fun ChannelModule(
                         isError = !minOk,
                         modifier = Modifier.weight(1f),
                         numeric = true,
+                        next = maxFocus,
                         onChange = {
                             minText = it
                             pushRange()
@@ -545,8 +583,9 @@ fun ChannelModule(
                         label = "Máx. X",
                         value = maxText,
                         isError = !maxOk,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).focusRequester(maxFocus),
                         numeric = true,
+                        next = max2Focus,
                         onChange = {
                             maxText = it
                             pushRange()
@@ -558,7 +597,7 @@ fun ChannelModule(
                         label = "Mín. Y",
                         value = min2Text,
                         isError = !min2Ok,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).focusRequester(max2Focus),
                         numeric = true,
                         onChange = {
                             min2Text = cleanFloatInput(it)
@@ -577,6 +616,31 @@ fun ChannelModule(
                         },
                     )
                 }
+                RangeClipRow(
+                    canCopy = minOk && maxOk && min2Ok && max2Ok,
+                    clipSize = 4,
+                    rangeClip = rangeClip,
+                    onCopy = {
+                        onCopyRange(
+                            listOf(
+                                minValue ?: 0f,
+                                maxValue ?: 1f,
+                                min2Value ?: 0f,
+                                max2Value ?: 1f,
+                            ),
+                        )
+                    },
+                    onPaste = { v ->
+                        if (v[0] < v[1] && v[2] < v[3]) {
+                            minText = v[0].toString()
+                            maxText = v[1].toString()
+                            min2Text = v[2].toString()
+                            max2Text = v[3].toString()
+                            pushRange()
+                            pushRangeY()
+                        }
+                    },
+                )
             }
 
             "button" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -586,6 +650,7 @@ fun ChannelModule(
                     isError = !binaryOk,
                     modifier = Modifier.weight(1f),
                     numeric = true,
+                    next = offFocus,
                     onChange = {
                         onText = cleanFloatInput(it)
                         pushBinary()
@@ -595,7 +660,7 @@ fun ChannelModule(
                     label = "Apagado",
                     value = offText,
                     isError = !binaryOk,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(offFocus),
                     numeric = true,
                     onChange = {
                         offText = cleanFloatInput(it)
@@ -699,6 +764,29 @@ fun OverviewCompRow(
             fontFamily = Mono,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f),
         )
+    }
+}
+
+@Composable
+private fun RangeClipRow(
+    canCopy: Boolean,
+    clipSize: Int,
+    rangeClip: List<Float>?,
+    onCopy: () -> Unit,
+    onPaste: (List<Float>) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        TextButton(onClick = onCopy, enabled = canCopy) {
+            Text(text = "Copiar rango", style = MaterialTheme.typography.labelMedium)
+        }
+        if (rangeClip?.size == clipSize) {
+            TextButton(onClick = { onPaste(rangeClip) }) {
+                Text(text = "Pegar", style = MaterialTheme.typography.labelMedium)
+            }
+        }
     }
 }
 

@@ -2,6 +2,7 @@ package ar.matu.oscpad
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,16 @@ fun XyPad(
     Box(modifier) {
         Canvas(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        emit(
+                            (it.x / size.width).coerceIn(0f, 1f),
+                            (1f - it.y / size.height).coerceIn(0f, 1f),
+                        )
+                    },
+                    onDoubleTap = { emit(0.5f, 0.5f) },
+                )
+            }.pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = { release() },
                     onDragCancel = { release() },
