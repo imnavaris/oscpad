@@ -17,7 +17,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -27,13 +31,15 @@ fun XyPad(
     onChange: (Float, Float) -> Unit,
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
+    label: String = "Pad XY",
 ) {
     val colors = MaterialTheme.colorScheme
     val emit by rememberUpdatedState(onChange)
     val release by rememberUpdatedState(onRelease)
+    val haptics = LocalHapticFeedback.current
     val dot = Color(0xFF4ADE80)
 
-    Box(modifier) {
+    Box(modifier.semantics { contentDescription = label }) {
         Canvas(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
                 detectTapGestures(
@@ -46,9 +52,13 @@ fun XyPad(
                     onDoubleTap = { emit(0.5f, 0.5f) },
                 )
             }.pointerInput(Unit) {
+                fun done() {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    release()
+                }
                 detectDragGestures(
-                    onDragEnd = { release() },
-                    onDragCancel = { release() },
+                    onDragEnd = { done() },
+                    onDragCancel = { done() },
                 ) { change, _ ->
                     change.consume()
                     emit(

@@ -2,8 +2,13 @@ package ar.matu.oscpad
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.WindowManager
@@ -86,6 +91,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -163,6 +169,9 @@ private fun App() {
     val activePreset = presets.find { it.id == activePresetId }
     val activeDirty = activePreset != null &&
         (activePreset.channels != channels || activePreset.net != net)
+    var animJob by remember { mutableStateOf<Job?>(null) }
+
+    fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
     var dim by remember {
         mutableStateOf(
             context.getSharedPreferences("oscpad", Context.MODE_PRIVATE).getBoolean("dim", false),
@@ -209,6 +218,61 @@ private fun App() {
 
     DisposableEffect(sender) {
         onDispose { sender.close() }
+    }
+
+    var importCandidate by remember { mutableStateOf<OscBackup?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch(Dispatchers.IO) {
+            val raw = try {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
+            } catch (e: Exception) {
+                null
+            }
+            val backup = raw?.let { decodeBackup(it) }
+            launch(Dispatchers.Main) {
+                if (backup == null) {
+                    snackbarHostState.showSnackbar(
+                        message = "Archivo inválido",
+                        duration = SnackbarDuration.Short,
+                    )
+                } else {
+                    importCandidate = backup
+                }
+            }
+        }
+    }
+
+    fun exportBackup() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val file = java.io.File(context.cacheDir, "oscpad-backup.json")
+                file.writeText(encodeBackup(OscBackup(channels, presets, net)))
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "ar.matu.oscpad.fileprovider",
+                    file,
+                )
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                launch(Dispatchers.Main) {
+                    context.startActivity(Intent.createChooser(intent, "Exportar backup"))
+                }
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) {
+                    snackbarHostState.showSnackbar(
+                        message = "No se pudo exportar",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+            }
+        }
     }
 
     fun replace(list: List<Channel>, next: Channel) =
@@ -359,7 +423,7 @@ private fun App() {
                                 level4 = mapped[3],
                             ),
                         )
-                        sendMany(ch.address(), ch.copy(
+                        sendMany(ch.address(net.prefix), ch.copy(
                             level = mapped[0],
                             level2 = mapped[1],
                             level3 = mapped[2],
@@ -482,11 +546,50 @@ private fun App() {
                             presets = presets,
                             activeId = activePresetId,
                             onSelect = { preset ->
-                                channels = preset.channels
-                                net = preset.net
-                                ChannelStore.save(context, preset.channels)
-                                NetStore.save(context, preset.net)
+                                animJob?.cancel()
+                                val from = channels
+                                val to = preset.channels
                                 activePresetId = preset.id
+                                if (from.map { it.id } == to.map { it.id }) {
+                                    animJob = scope.launch {
+                                        val steps = 20
+                                        for (s in 1..steps) {
+                                            val t = s / steps.toFloat()
+                                            channels = from.mapIndexed { i, c ->
+                                                val d = to[i]
+                                                if (c.type == "sensor") {
+                                                    d
+                                                } else {
+                                                    c.copy(
+                                                        level = lerp(c.level, d.level, t),
+                                                        level2 = lerp(c.level2, d.level2, t),
+                                                        level3 = lerp(c.level3, d.level3, t),
+                                                        level4 = lerp(c.level4, d.level4, t),
+                                                        on = if (s == steps) d.on else c.on,
+                                                    )
+                                                }
+                                            }
+                                            channels.forEach {
+                                                if (it.type == "sensor") return@forEach
+                                                if (it.compCount() > 1) {
+                                                    sendMany(it.address(net.prefix), it.outputValues())
+                                                } else {
+                                                    send(it.address(net.prefix), it.current())
+                                                }
+                                            }
+                                            delay(15)
+                                        }
+                                        channels = to
+                                        net = preset.net
+                                        ChannelStore.save(context, to)
+                                        NetStore.save(context, preset.net)
+                                    }
+                                } else {
+                                    channels = to
+                                    net = preset.net
+                                    ChannelStore.save(context, to)
+                                    NetStore.save(context, preset.net)
+                                }
                             },
                             onDeselect = { activePresetId = null },
                             onSaveNew = { name ->
@@ -581,9 +684,9 @@ private fun App() {
                                     var ok = 0
                                     channels.forEach {
                                         val sent = if (it.compCount() > 1) {
-                                            sendManyNow(it.address(), it.outputValues())
+                                            sendManyNow(it.address(net.prefix), it.outputValues())
                                         } else {
-                                            sendNow(it.address(), it.current())
+                                            sendNow(it.address(net.prefix), it.current())
                                         }
                                         if (sent) ok++
                                     }
@@ -598,6 +701,8 @@ private fun App() {
                                 ChannelStore.save(context, emptyList())
                                 activePresetId = null
                             },
+                            onExport = ::exportBackup,
+                            onImport = { importLauncher.launch("application/json") },
                         )
                         }
                     }
@@ -791,7 +896,7 @@ private fun App() {
                                         }
                                         Spacer(Modifier.height(2.dp))
                                         Text(
-                                            text = channel.address(),
+                                            text = channel.address(net.prefix),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontFamily = Mono,
                                             color = MaterialTheme.colorScheme.primary,
@@ -843,6 +948,7 @@ private fun App() {
                                     onDuplicate = { duplicate(channel) },
                                     rangeClip = rangeClip,
                                     onCopyRange = { rangeClip = it },
+                                    prefix = net.prefix,
                                 )
                             }
                         }
@@ -877,6 +983,50 @@ private fun App() {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     actionColor = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            importCandidate?.let { backup ->
+                AlertDialog(
+                    onDismissRequest = { importCandidate = null },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                channels = backup.channels
+                                presets = backup.presets
+                                net = backup.net
+                                ChannelStore.save(context, backup.channels)
+                                PresetStore.save(context, backup.presets)
+                                NetStore.save(context, backup.net)
+                                activePresetId = null
+                                importCandidate = null
+                            },
+                        ) {
+                            Text(
+                                text = "Reemplazar",
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { importCandidate = null }) {
+                            Text(
+                                text = "Cancelar",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    },
+                    title = { Text("Importar backup") },
+                    text = {
+                        Text(
+                            text = "${backup.channels.size} canales, " +
+                                "${backup.presets.size} presets. " +
+                                "Reemplaza todo lo actual.",
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    textContentColor = MaterialTheme.colorScheme.onSurface,
                 )
             }
 

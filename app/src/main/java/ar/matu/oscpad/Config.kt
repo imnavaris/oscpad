@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 data class NetConfig(
     val host: String = "192.168.0.112",
     val port: Int = 8000,
+    val prefix: String = "",
 )
 
 object NetStore {
@@ -19,6 +20,7 @@ object NetStore {
         return NetConfig(
             host = prefs.getString("host", NetConfig().host) ?: NetConfig().host,
             port = prefs.getInt("port", NetConfig().port),
+            prefix = prefs.getString("prefix", "") ?: "",
         )
     }
 
@@ -27,6 +29,7 @@ object NetStore {
             .edit()
             .putString("host", net.host)
             .putInt("port", net.port)
+            .putString("prefix", net.prefix)
             .apply()
     }
 }
@@ -62,6 +65,28 @@ data class Preset(
     val net: NetConfig,
 )
 
+@Serializable
+data class OscBackup(
+    val channels: List<Channel> = emptyList(),
+    val presets: List<Preset> = emptyList(),
+    val net: NetConfig = NetConfig(),
+)
+
+fun encodeBackup(backup: OscBackup): String = json.encodeToString(backup)
+
+fun decodeBackup(raw: String): OscBackup? = try {
+    val backup = json.decodeFromString<OscBackup>(raw)
+    backup.copy(
+        channels = backup.channels.map {
+            val t = it.type
+            it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
+        }.filter { it.name.isNotBlank() },
+        presets = backup.presets.filter { it.name.isNotBlank() },
+    )
+} catch (e: Exception) {
+    null
+}
+
 private val json = Json { ignoreUnknownKeys = true }
 
 fun Channel.xyValues(x: Float = level, y: Float = level2) = floatArrayOf(
@@ -69,7 +94,8 @@ fun Channel.xyValues(x: Float = level, y: Float = level2) = floatArrayOf(
     min2 + (max2 - min2) * y,
 )
 
-fun Channel.address() = "/$name"
+fun Channel.address(prefix: String = "") =
+    if (prefix.isBlank()) "/$name" else "/$prefix/$name"
 
 fun channelSortKey(name: String): Pair<String, Int> {
     val m = Regex("^(.*?)(\\d+)$").find(name.trim())

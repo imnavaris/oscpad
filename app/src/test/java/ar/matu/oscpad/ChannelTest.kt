@@ -16,6 +16,31 @@ class ChannelTest {
     }
 
     @Test
+    fun addressUsesPrefixWhenPresent() {
+        val ch = Channel(id = 1, name = "fader1")
+        assertEquals("/oscpad1/fader1", ch.address("oscpad1"))
+        assertEquals("/fader1", ch.address("  "))
+    }
+
+    @Test
+    fun backupRoundTripsChannelsPresetsAndNet() {
+        val backup = OscBackup(
+            channels = listOf(Channel(id = 1, name = "a")),
+            presets = listOf(
+                Preset(id = 2, name = "p", channels = emptyList(), net = NetConfig()),
+            ),
+            net = NetConfig(host = "10.0.0.2", port = 9000, prefix = "oscpad1"),
+        )
+        val decoded = decodeBackup(encodeBackup(backup))
+        assertEquals(backup, decoded)
+    }
+
+    @Test
+    fun backupRejectsGarbage() {
+        assertNull(decodeBackup("no es json"))
+    }
+
+    @Test
     fun faderCurrentScalesLevelIntoRange() {
         val channel = Channel(id = 1, name = "luz", min = 100f, max = 200f, level = 0.25f)
         assertEquals(125f, channel.current(), 0.001f)

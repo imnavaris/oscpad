@@ -42,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -228,7 +230,15 @@ fun PresetsPanel(
                                         expandedIds + preset.id
                                     }
                                 },
-                                modifier = Modifier.size(40.dp),
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .semantics {
+                                        contentDescription = if (expanded) {
+                                            "Colapsar preset"
+                                        } else {
+                                            "Expandir preset"
+                                        }
+                                    },
                             ) {
                                 LabIcons.ChevronDown(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -312,7 +322,9 @@ fun PresetsPanel(
                                 }
                                 IconButton(
                                     onClick = { onOverwrite(preset) },
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .semantics { contentDescription = "Sobrescribir preset" },
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Save,
@@ -326,7 +338,9 @@ fun PresetsPanel(
                                         renamingId = preset.id
                                         renameText = preset.name
                                     },
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .semantics { contentDescription = "Renombrar preset" },
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Edit,
@@ -337,7 +351,9 @@ fun PresetsPanel(
                                 }
                                 IconButton(
                                     onClick = { deleteTarget = preset },
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .semantics { contentDescription = "Borrar preset" },
                                 ) {
                                     LabIcons.X(
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,

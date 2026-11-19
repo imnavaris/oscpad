@@ -46,9 +46,12 @@ fun SettingsPanel(
     onChange: (NetConfig) -> Unit,
     onTestAll: () -> Unit,
     onClearAll: () -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
 ) {
     var host by remember { mutableStateOf(net.host) }
     var port by remember { mutableStateOf(net.port.toString()) }
+    var prefixText by remember { mutableStateOf(net.prefix) }
     var confirmClear by remember { mutableStateOf(false) }
     var hostTouched by remember { mutableStateOf(false) }
     var portTouched by remember { mutableStateOf(false) }
@@ -62,7 +65,7 @@ fun SettingsPanel(
         val parsedPort = port.toIntOrNull() ?: return
         if (host.isBlank()) return
         if (parsedPort !in 1..65535) return
-        onChange(net.copy(host = host.trim(), port = parsedPort))
+        onChange(net.copy(host = host.trim(), port = parsedPort, prefix = prefixText.trim()))
     }
 
     Column(
@@ -94,8 +97,7 @@ fun SettingsPanel(
                 isError = !hostOk,
                 modifier = Modifier
                     .weight(1.5f)
-                    .onFocusChanged { state ->
-                        if (state.isFocused) {
+                    .onFocusChanged { state ->                        if (state.isFocused) {
                             hostTouched = true
                         } else if (hostTouched) {
                             push()
@@ -120,6 +122,20 @@ fun SettingsPanel(
                 onChange = { port = it.filter(Char::isDigit).take(5) },
             )
         }
+        Field(
+            label = "Prefijo (opcional)",
+            value = prefixText,
+            isError = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { state ->
+                    if (!state.isFocused) push()
+                },
+            onChange = {
+                prefixText = sanitizeName(it) ?: ""
+                push()
+            },
+        )
         Button(
             onClick = onTestAll,
             modifier = Modifier
@@ -136,6 +152,31 @@ fun SettingsPanel(
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Medium,
             )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            TextButton(
+                onClick = onExport,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = "Exportar",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            TextButton(
+                onClick = onImport,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = "Importar",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         TextButton(
             onClick = {

@@ -16,7 +16,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -27,14 +31,17 @@ fun Fader(
     modifier: Modifier = Modifier
         .width(64.dp)
         .height(320.dp),
+    label: String = "Fader",
 ) {
     val colors = MaterialTheme.colorScheme
     val current by rememberUpdatedState(value)
     val emit by rememberUpdatedState(onChange)
     val release by rememberUpdatedState(onRelease)
+    val haptics = LocalHapticFeedback.current
 
     Canvas(
         modifier = modifier
+            .semantics { contentDescription = "$label, valor ${formatValue(value)}" }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { emit((1f - it.y / size.height).coerceIn(0f, 1f)) },
@@ -44,13 +51,17 @@ fun Fader(
             .pointerInput(Unit) {
                 var base = 0f
                 var travel = 0f
+                fun done() {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    release()
+                }
                 detectVerticalDragGestures(
                     onDragStart = {
                         base = current
                         travel = 0f
                     },
-                    onDragEnd = { release() },
-                    onDragCancel = { release() },
+                    onDragEnd = { done() },
+                    onDragCancel = { done() },
                 ) { pointer, delta ->
                     pointer.consume()
                     travel += delta

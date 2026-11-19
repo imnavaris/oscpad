@@ -40,10 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -104,6 +108,7 @@ fun ChannelModule(
     onDuplicate: () -> Unit,
     rangeClip: List<Float>?,
     onCopyRange: (List<Float>) -> Unit,
+    prefix: String,
 ) {
     val throttle = remember(channel.id) { Throttle(66) }
     var name by remember(channel.id) { mutableStateOf(channel.name) }
@@ -234,7 +239,9 @@ fun ChannelModule(
             }
             IconButton(
                 onClick = onDuplicate,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = "Duplicar canal" },
             ) {
                 Icon(
                     imageVector = Icons.Filled.ContentCopy,
@@ -245,7 +252,9 @@ fun ChannelModule(
             }
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = "Borrar canal" },
             ) {
                 LabIcons.X(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -266,11 +275,11 @@ fun ChannelModule(
                     onChange = { level ->
                         val next = channel.copy(level = level)
                         onLive(next)
-                        if (throttle.shouldSend()) onSend(next.address(), next.current())
+                        if (throttle.shouldSend()) onSend(next.address(prefix), next.current())
                     },
                     onRelease = {
                         onDone(channel)
-                        onSend(channel.address(), channel.current())
+                        onSend(channel.address(prefix), channel.current())
                     },
                     modifier = Modifier
                         .width(64.dp)
@@ -278,25 +287,27 @@ fun ChannelModule(
                 )
 
                 "button" -> {
+                    val haptics = LocalHapticFeedback.current
                     ToggleControl(
                         on = channel.on,
                         hold = channel.hold,
                         onLabel = formatValue(channel.onValue),
                         offLabel = formatValue(channel.offValue),
                         onToggle = { state ->
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             val next = channel.copy(on = state)
                             onDone(next)
-                            onSend(next.address(), next.current())
+                            onSend(next.address(prefix), next.current())
                         },
                         onDown = {
                             val next = channel.copy(on = true)
                             onLive(next)
-                            onSend(next.address(), channel.onValue)
+                            onSend(next.address(prefix), channel.onValue)
                         },
                         onUp = {
                             val next = channel.copy(on = false)
                             onLive(next)
-                            onSend(next.address(), channel.offValue)
+                            onSend(next.address(prefix), channel.offValue)
                         },
                         diameter = 120.dp,
                     )
@@ -309,12 +320,12 @@ fun ChannelModule(
                         val next = channel.copy(level = x, level2 = y)
                         onLive(next)
                         if (throttle.shouldSend()) {
-                            onSendMany(next.address(), next.outputValues())
+                            onSendMany(next.address(prefix), next.outputValues())
                         }
                     },
                     onRelease = {
                         onDone(channel)
-                        onSendMany(channel.address(), channel.outputValues())
+                        onSendMany(channel.address(prefix), channel.outputValues())
                     },
                     modifier = Modifier
                         .aspectRatio(1f)
@@ -385,12 +396,12 @@ fun ChannelModule(
                     fun push(next: Channel) {
                         onLive(next)
                         if (throttle.shouldSend()) {
-                            onSendMany(next.address(), next.outputValues())
+                            onSendMany(next.address(prefix), next.outputValues())
                         }
                     }
                     fun release() {
                         onDone(channel)
-                        onSendMany(channel.address(), channel.outputValues())
+                        onSendMany(channel.address(prefix), channel.outputValues())
                     }
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -438,9 +449,10 @@ fun ChannelModule(
                                 val on = channel.compEnabled(idx)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable {
-                                        onDone(channel.toggleComp(idx))
-                                    },
+                                    modifier = Modifier.clickable(
+                                        onClickLabel = "Activar o silenciar componente",
+                                        onClick = { onDone(channel.toggleComp(idx)) },
+                                    ),
                                 ) {
                                     Text(
                                         text = letter,
@@ -497,7 +509,7 @@ fun ChannelModule(
             Spacer(Modifier.height(4.dp))
         }
         Text(
-            text = channel.address(),
+            text = channel.address(prefix),
             style = MaterialTheme.typography.labelMedium,
             fontFamily = Mono,
             color = MaterialTheme.colorScheme.primary,
@@ -746,9 +758,16 @@ fun OverviewCompRow(
     enabled: Boolean,
     onToggle: () -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable(onClick = onToggle),
+        modifier = Modifier.clickable(
+            onClickLabel = "Activar o silenciar componente",
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onToggle()
+            },
+        ),
     ) {
         Text(
             text = letter,
