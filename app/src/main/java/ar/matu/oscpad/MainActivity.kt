@@ -118,14 +118,20 @@ private fun App() {
     var channels by remember {
         mutableStateOf(ChannelStore.load(context).let { loaded ->
             val prefs = context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
-            if (prefs.getBoolean("order_migrated", false)) {
+            if (prefs.getBoolean("order_migrated_v2", false)) {
                 loaded
             } else {
-                val sorted = loaded.sortedBy { it.id }
+                val sorted = loaded.sortedWith(
+                    compareBy(
+                        { channelSortKey(it.name).first },
+                        { channelSortKey(it.name).second },
+                        { it.id },
+                    ),
+                )
                 if (sorted.map { it.id } != loaded.map { it.id }) {
                     ChannelStore.save(context, sorted)
                 }
-                prefs.edit().putBoolean("order_migrated", true).apply()
+                prefs.edit().putBoolean("order_migrated_v2", true).apply()
                 sorted
             }
         })
@@ -240,21 +246,33 @@ private fun App() {
     val feeds = remember { mutableMapOf<Long, SensorFeed>() }
     val channelsState = rememberUpdatedState(channels)
     val sensorKeys = channels.filter { it.type == "sensor" }
-        .map {
-            Triple(it.id, it.name, Triple(it.sensorKind, it.sensorAxis, it.rateMs))
-        }
+        .map { it.id to (it.sensorKind to it.rateMs) }
 
     DisposableEffect(sensorKeys) {
-        val wanted = sensorKeys.map { it.first to it.third }.toMap()
+        val wanted = sensorKeys.toMap()
         feeds.keys.filter { it !in wanted }.forEach { feeds.remove(it)?.stop() }
         wanted.forEach { (id, key) ->
             if (feeds[id] == null) {
                 val channel = channelsState.value.firstOrNull { it.id == id } ?: return@forEach
-                val feed = SensorFeed(context, key.first, key.second, key.third) { norm ->
+                val feed = SensorFeed(context, key.first, key.second) { norms ->
                     channelsState.value.find { it.id == id }?.let { ch ->
-                        val v = ch.min + (ch.max - ch.min) * norm.coerceIn(0f, 1f)
-                        live(ch.copy(level = v))
-                        send(ch.address(), v)
+                        val mapped = norms.map { n ->
+                            ch.min + (ch.max - ch.min) * n.coerceIn(0f, 1f)
+                        }
+                        live(
+                            ch.copy(
+                                level = mapped[0],
+                                level2 = mapped[1],
+                                level3 = mapped[2],
+                                level4 = mapped[3],
+                            ),
+                        )
+                        sendMany(ch.address(), ch.copy(
+                            level = mapped[0],
+                            level2 = mapped[1],
+                            level3 = mapped[2],
+                            level4 = mapped[3],
+                        ).outputValues())
                     }
                 }
                 feeds[id] = feed
@@ -424,13 +442,10 @@ private fun App() {
                                 NetStore.save(context, it)
                             },
                             onTestAll = {    channels.forEach {
-                                    when (it.type) {
-                                        "xy" -> sendMany(it.address(), it.xyValues())
-                                        "color" -> sendMany(
-                                            it.address(),
-                                            floatArrayOf(it.level, it.level2, it.level3),
-                                        )
-                                        else -> send(it.address(), it.current())
+                                    if (it.compCount() > 1) {
+                                        sendMany(it.address(), it.outputValues())
+                                    } else {
+                                        send(it.address(), it.current())
                                     }
                                 }
                             },
@@ -561,10 +576,36 @@ private fun App() {
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         Spacer(Modifier.height(4.dp))
-                                        if (channel.type == "xy") {
-                                            val v = channel.xyValues()
-                                            OverviewXyRow("X", v[0])
-                                            OverviewXyRow("Y", v[1])
+                                        if (channel.compCount() > 1) {
+                                            val raws = when (channel.type) {
+                                                "xy" -> channel.xyValues()
+                                                "color" -> floatArrayOf(
+                                                    channel.level,
+                                                    channel.level2,
+                                                    channel.level3,
+                                                )
+                                                else -> floatArrayOf(
+                                                    channel.level,
+                                                    channel.level2,
+                                                    channel.level3,
+                                                    channel.level4,
+                                                )
+                                            }
+                                            raws.forEachIndexed { i, raw ->
+                                                OverviewCompRow(
+                                                    letter = channel.compLetter(i),
+                                                    tint = axisTint(i),
+                                                    value = raw,
+                                                    enabled = channel.compEnabled(i),
+                                                    onToggle = {
+                                                        val next = channel.toggleComp(i)
+                                                        channels = channels.map {
+                                                            if (it.id == channel.id) next else it
+                                                        }
+                                                        ChannelStore.save(context, channels)
+                                                    },
+                                                )
+                                            }
                                         } else {
                                             Text(
                                                 text = channelValueText(channel),

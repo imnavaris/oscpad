@@ -256,7 +256,7 @@ fun PresetsPanel(
                                 ) {
                                     Text(
                                         text = preset.name,
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.Medium,
                                         color = if (active) {
                                             MaterialTheme.colorScheme.primary
@@ -266,7 +266,7 @@ fun PresetsPanel(
                                     )
                                     Text(
                                         text = "${preset.channels.size} canales",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }

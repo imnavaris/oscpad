@@ -50,6 +50,8 @@ data class Channel(
     val sensorKind: String = "accelerometer",
     val sensorAxis: String = "x",
     val rateMs: Long = 50,
+    val level4: Float = 0.5f,
+    val mask: Int = 15,
 )
 
 @Serializable
@@ -68,6 +70,46 @@ fun Channel.xyValues(x: Float = level, y: Float = level2) = floatArrayOf(
 )
 
 fun Channel.address() = "/$name"
+
+fun channelSortKey(name: String): Pair<String, Int> {
+    val m = Regex("^(.*?)(\\d+)$").find(name.trim())
+    return if (m != null) {
+        Pair(m.groupValues[1], m.groupValues[2].toIntOrNull() ?: 0)
+    } else {
+        Pair(name, 0)
+    }
+}
+
+fun Channel.compCount() = when (type) {
+    "xy" -> 2
+    "color" -> 3
+    "sensor" -> 4
+    else -> 1
+}
+
+fun Channel.compLetter(i: Int) = when (type) {
+    "xy" -> if (i == 0) "X" else "Y"
+    "color" -> listOf("R", "G", "B").getOrElse(i) { "" }
+    "sensor" -> listOf("X", "Y", "Z", "M").getOrElse(i) { "" }
+    else -> ""
+}
+
+fun Channel.compEnabled(i: Int) = mask and (1 shl i) != 0
+
+fun Channel.toggleComp(i: Int) = copy(mask = mask xor (1 shl i))
+
+fun Channel.outputValues(): FloatArray {
+    fun masked(i: Int, v: Float) = if (compEnabled(i)) v else 0f
+    return when (type) {
+        "xy" -> {
+            val v = xyValues()
+            floatArrayOf(masked(0, v[0]), masked(1, v[1]))
+        }
+        "color" -> floatArrayOf(masked(0, level), masked(1, level2), masked(2, level3))
+        "sensor" -> floatArrayOf(masked(0, level), masked(1, level2), masked(2, level3), masked(3, level4))
+        else -> floatArrayOf(current())
+    }
+}
 
 fun Channel.current() = if (type == "button") {
     if (on) onValue else offValue

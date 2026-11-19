@@ -103,7 +103,7 @@ fun ChannelModule(
     onSend: (String, Float) -> Unit,
     onSendMany: (String, FloatArray) -> Unit,
 ) {
-    val throttle = remember(channel.id) { Throttle() }
+    val throttle = remember(channel.id) { Throttle(66) }
     var name by remember(channel.id) { mutableStateOf(channel.name) }
     var minText by remember(channel.id) { mutableStateOf(channel.min.toString()) }
     var maxText by remember(channel.id) { mutableStateOf(channel.max.toString()) }
@@ -252,7 +252,10 @@ fun ChannelModule(
                         onLive(next)
                         if (throttle.shouldSend()) onSend(next.address(), next.current())
                     },
-                    onRelease = { onDone(channel) },
+                    onRelease = {
+                        onDone(channel)
+                        onSend(channel.address(), channel.current())
+                    },
                     modifier = Modifier
                         .width(64.dp)
                         .fillMaxHeight(),
@@ -290,18 +293,19 @@ fun ChannelModule(
                         val next = channel.copy(level = x, level2 = y)
                         onLive(next)
                         if (throttle.shouldSend()) {
-                            onSendMany(next.address(), next.xyValues())
+                            onSendMany(next.address(), next.outputValues())
                         }
                     },
-                    onRelease = { onDone(channel) },
+                    onRelease = {
+                        onDone(channel)
+                        onSendMany(channel.address(), channel.outputValues())
+                    },
                     modifier = Modifier
                         .aspectRatio(1f)
                         .fillMaxSize(),
                 )
 
                 "sensor" -> {
-                    val spec = sensors.firstOrNull { it.kind == channel.sensorKind }
-                        ?: sensors.firstOrNull()
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -355,27 +359,6 @@ fun ChannelModule(
                                 }
                             }
                         }
-                        if ((spec?.axes ?: emptyList()).size > 1) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                (spec?.axes ?: emptyList()).forEach { axis ->
-                                    TypeChip(
-                                        label = axis.replaceFirstChar { it.uppercase() },
-                                        selected = axis == channel.sensorAxis,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onDone(channel.copy(sensorAxis = axis)) },
-                                    )
-                                }
-                            }
-                            val gloss = axisGloss(channel.sensorKind)
-                            if (gloss.isNotEmpty()) {
-                                Text(
-                                    text = gloss,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -386,11 +369,12 @@ fun ChannelModule(
                     fun push(next: Channel) {
                         onLive(next)
                         if (throttle.shouldSend()) {
-                            onSendMany(
-                                next.address(),
-                                floatArrayOf(next.level, next.level2, next.level3),
-                            )
+                            onSendMany(next.address(), next.outputValues())
                         }
+                    }
+                    fun release() {
+                        onDone(channel)
+                        onSendMany(channel.address(), channel.outputValues())
                     }
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -411,19 +395,19 @@ fun ChannelModule(
                             tint = Color(0xFFFF5252),
                             value = r,
                             onChange = { push(channel.copy(level = it)) },
-                            onDone = { onDone(channel) },
+                            onDone = { release() },
                         )
                         ColorSlider(
                             tint = MaterialTheme.colorScheme.primary,
                             value = g,
                             onChange = { push(channel.copy(level2 = it)) },
-                            onDone = { onDone(channel) },
+                            onDone = { release() },
                         )
                         ColorSlider(
                             tint = Color(0xFF5AA9FF),
                             value = b,
                             onChange = { push(channel.copy(level3 = it)) },
-                            onDone = { onDone(channel) },
+                            onDone = { release() },
                         )
                         Spacer(Modifier.height(8.dp))
                         Row(
@@ -434,19 +418,27 @@ fun ChannelModule(
                                 Triple("R", r, Color(0xFFFF5252)),
                                 Triple("G", g, MaterialTheme.colorScheme.primary),
                                 Triple("B", b, Color(0xFF5AA9FF)),
-                            ).forEach { (letter, v, tint) ->
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            ).forEachIndexed { idx, (letter, v, tint) ->
+                                val on = channel.compEnabled(idx)
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.clickable {
+                                        onDone(channel.toggleComp(idx))
+                                    },
+                                ) {
                                     Text(
                                         text = letter,
                                         style = MaterialTheme.typography.displaySmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = tint,
+                                        color = tint.copy(alpha = if (on) 1f else 0.35f),
                                     )
                                     Text(
                                         text = formatValue(v),
                                         style = MaterialTheme.typography.displaySmall,
                                         fontFamily = Mono,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(
+                                            alpha = if (on) 1f else 0.35f,
+                                        ),
                                     )
                                 }
                             }
@@ -456,30 +448,25 @@ fun ChannelModule(
             }
         }
         Spacer(Modifier.height(16.dp))
-        if (type == "xy") {
+        if (channel.compCount() > 1 && type != "color") {
             Row(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val v = channel.xyValues()
-                listOf("X" to v[0], "Y" to v[1]).forEach { (letter, value) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = letter,
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = Mono,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = formatValue(value),
-                            style = MaterialTheme.typography.displaySmall,
-                            fontFamily = Mono,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                val raws = if (type == "xy") {
+                    channel.xyValues()
+                } else {
+                    floatArrayOf(channel.level, channel.level2, channel.level3, channel.level4)
+                }
+                raws.forEachIndexed { i, raw ->
+                    OverviewCompRow(
+                        letter = channel.compLetter(i),
+                        tint = axisTint(i),
+                        value = raw,
+                        enabled = channel.compEnabled(i),
+                        onToggle = { onDone(channel.toggleComp(i)) },
+                    )
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -685,21 +672,38 @@ private fun ColorSlider(
 }
 
 @Composable
-fun OverviewXyRow(letter: String, value: Float) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+fun axisTint(i: Int): Color = when (i % 4) {
+    0 -> Color(0xFFFF5252)
+    1 -> MaterialTheme.colorScheme.primary
+    2 -> Color(0xFF5AA9FF)
+    else -> MaterialTheme.colorScheme.onSurface
+}
+
+@Composable
+fun OverviewCompRow(
+    letter: String,
+    tint: Color,
+    value: Float,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickable(onClick = onToggle),
+    ) {
         Text(
             text = letter,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             fontFamily = Mono,
-            color = MaterialTheme.colorScheme.primary,
+            color = tint.copy(alpha = if (enabled) 1f else 0.35f),
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = formatValue(value),
             style = MaterialTheme.typography.headlineSmall,
             fontFamily = Mono,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f),
         )
     }
 }

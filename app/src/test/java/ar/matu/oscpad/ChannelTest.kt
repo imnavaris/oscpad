@@ -118,4 +118,55 @@ class ChannelTest {
         val decoded = json.decodeFromString<Preset>(json.encodeToString(preset))
         assertEquals(preset, decoded)
     }
+
+    @Test
+    fun maskDefaultsToAllEnabled() {
+        val ch = Channel(id = 1, name = "xy1", type = "xy")
+        assertEquals(15, ch.mask)
+        assertEquals(true, ch.compEnabled(0))
+        assertEquals(true, ch.compEnabled(1))
+    }
+
+    @Test
+    fun toggleCompFlipsOneBit() {
+        val ch = Channel(id = 1, name = "rgb", type = "color")
+        val off = ch.toggleComp(1)
+        assertEquals(true, off.compEnabled(0))
+        assertEquals(false, off.compEnabled(1))
+        assertEquals(true, off.compEnabled(2))
+        assertEquals(true, off.toggleComp(1).compEnabled(1))
+    }
+
+    @Test
+    fun outputValuesZeroDisabledComponents() {
+        val ch = Channel(
+            id = 1,
+            name = "rgb",
+            type = "color",
+            level = 0.2f,
+            level2 = 0.4f,
+            level3 = 0.6f,
+            mask = 15 xor (1 shl 1),
+        )
+        val out = ch.outputValues()
+        assertEquals(3, out.size)
+        assertEquals(0.2f, out[0], 0.001f)
+        assertEquals(0f, out[1], 0.001f)
+        assertEquals(0.6f, out[2], 0.001f)
+    }
+
+    @Test
+    fun outputValuesSensorHasFourComponents() {
+        val ch = Channel(id = 1, name = "giro", type = "sensor", level4 = 0.9f)
+        val out = ch.outputValues()
+        assertEquals(4, out.size)
+        assertEquals(0.9f, out[3], 0.001f)
+    }
+
+    @Test
+    fun compLettersMatchComponentCount() {
+        assertEquals("X", Channel(id = 1, name = "a", type = "xy").compLetter(0))
+        assertEquals("B", Channel(id = 1, name = "a", type = "color").compLetter(2))
+        assertEquals("M", Channel(id = 1, name = "a", type = "sensor").compLetter(3))
+    }
 }

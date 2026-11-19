@@ -22,7 +22,6 @@ private val catalog = listOf(
     Triple(Sensor.TYPE_GYROSCOPE, "gyroscope", "Giroscopio"),
     Triple(Sensor.TYPE_MAGNETIC_FIELD, "magnetic_field", "Magnetómetro"),
     Triple(Sensor.TYPE_LIGHT, "light", "Luz"),
-    Triple(Sensor.TYPE_PROXIMITY, "proximity", "Proximidad"),
     Triple(Sensor.TYPE_PRESSURE, "pressure", "Presión"),
 )
 
@@ -45,9 +44,8 @@ fun listSensors(context: Context): List<SensorSpec> {
 class SensorFeed(
     context: Context,
     private val kind: String,
-    private val axis: String,
     private val rateMs: Long,
-    private val onValue: (Float) -> Unit,
+    private val onValues: (FloatArray) -> Unit,
 ) : SensorEventListener {
     private val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
     private val sensor = manager?.getDefaultSensor(sensorType(kind))
@@ -66,7 +64,15 @@ class SensorFeed(
         val now = System.currentTimeMillis()
         if (now - lastMs < rateMs.coerceAtLeast(16L)) return
         lastMs = now
-        onValue(normalizeSensor(kind, axis, event.values, sensor?.maximumRange ?: 0f))
+        val maxRange = sensor?.maximumRange ?: 0f
+        onValues(
+            floatArrayOf(
+                normalizeSensor(kind, "x", event.values, maxRange),
+                normalizeSensor(kind, "y", event.values, maxRange),
+                normalizeSensor(kind, "z", event.values, maxRange),
+                normalizeSensor(kind, "magnitud", event.values, maxRange),
+            ),
+        )
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
