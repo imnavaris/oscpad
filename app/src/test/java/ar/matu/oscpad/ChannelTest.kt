@@ -114,7 +114,6 @@ class ChannelTest {
         assertEquals(0.5f, channel.level2, 0.001f)
         assertEquals(0.5f, channel.level3, 0.001f)
         assertEquals("accelerometer", channel.sensorKind)
-        assertEquals("x", channel.sensorAxis)
         assertEquals(50L, channel.rateMs)
     }
 
@@ -125,7 +124,6 @@ class ChannelTest {
         assertEquals(0.5f, decoded.level2, 0.001f)
         assertEquals(0.5f, decoded.level3, 0.001f)
         assertEquals("accelerometer", decoded.sensorKind)
-        assertEquals("x", decoded.sensorAxis)
         assertEquals(50L, decoded.rateMs)
     }
 
@@ -196,8 +194,52 @@ class ChannelTest {
     }
 
     @Test
-    fun compLettersMatchComponentCount() {
-        assertEquals("X", Channel(id = 1, name = "a", type = "xy").compLetter(0))
+    fun scalarMagnitudNeverIndexesOutOfBounds() {
+        val light = normalizeSensor("light", "magnitud", floatArrayOf(100f), 40000f)
+        assertEquals(true, light in 0f..1f)
+        val pressure = normalizeSensor("pressure", "magnitud", floatArrayOf(1013f), 1100f)
+        assertEquals(true, pressure in 0f..1f)
+    }
+
+    @Test
+    fun clampedKeepsLevelsInUnitRange() {
+        val ch = Channel(id = 1, name = "rgb", type = "color", level = 6f, level2 = -2f, level3 = 0.4f, level4 = 99f)
+        val out = ch.clamped()
+        assertEquals(1f, out.level, 0.001f)
+        assertEquals(0f, out.level2, 0.001f)
+        assertEquals(0.4f, out.level3, 0.001f)
+        assertEquals(1f, out.level4, 0.001f)
+    }
+
+    @Test
+    fun backupCapsChannelAndPresetCounts() {
+        val many = (1..100).map { Channel(id = it.toLong(), name = "c$it") }
+        val decoded = decodeBackup(encodeBackup(OscBackup(channels = many)))
+        assertEquals(32, decoded?.channels?.size)
+    }
+
+    @Test
+    fun sanitizeNameDropsNonAscii() {
+        assertEquals("bao", sanitizeName("baño"))
+        assertEquals("mi_luz", sanitizeName("mi luz"))
+        assertNull(sanitizeName("ñü"))
+    }
+
+    @Test
+    fun bumpCounterNeverGoesBackwards() {
+        assertEquals(11L, bumpCounter(11L, listOf(3L, 7L)))
+        assertEquals(8L, bumpCounter(2L, listOf(3L, 7L)))
+        assertEquals(1L, bumpCounter(1L, emptyList()))
+    }
+
+    @Test
+    fun backupClampsOutOfRangeLevels() {        val backup = OscBackup(channels = listOf(Channel(id = 1, name = "a", level = 6f)))
+        val decoded = decodeBackup(encodeBackup(backup))
+        assertEquals(1f, decoded?.channels?.first()?.level ?: -1f, 0.001f)
+    }
+
+    @Test
+    fun compLettersMatchComponentCount() {        assertEquals("X", Channel(id = 1, name = "a", type = "xy").compLetter(0))
         assertEquals("B", Channel(id = 1, name = "a", type = "color").compLetter(2))
         assertEquals("M", Channel(id = 1, name = "a", type = "sensor").compLetter(3))
     }

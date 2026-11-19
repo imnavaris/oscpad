@@ -83,13 +83,6 @@ fun SettingsPanel(
             readOnly = true,
             onChange = {},
         )
-        if (!sameSubnet(localIp, host)) {
-            Text(
-                text = "Red distinta al destino: no va a llegar nada",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(
                 label = "IP",

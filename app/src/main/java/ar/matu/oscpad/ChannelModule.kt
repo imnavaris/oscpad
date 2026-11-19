@@ -107,16 +107,17 @@ fun ChannelModule(
     onSendMany: (String, FloatArray) -> Unit,
     onDuplicate: () -> Unit,
     prefix: String,
+    rev: Int,
 ) {
     val throttle = remember(channel.id) { Throttle(66) }
-    var name by remember(channel.id) { mutableStateOf(channel.name) }
-    var minText by remember(channel.id) { mutableStateOf(channel.min.toString()) }
-    var maxText by remember(channel.id) { mutableStateOf(channel.max.toString()) }
-    var min2Text by remember(channel.id) { mutableStateOf(channel.min2.toString()) }
-    var max2Text by remember(channel.id) { mutableStateOf(channel.max2.toString()) }
-    var onText by remember(channel.id) { mutableStateOf(channel.onValue.toString()) }
-    var offText by remember(channel.id) { mutableStateOf(channel.offValue.toString()) }
-    var rateText by remember(channel.id) { mutableStateOf(channel.rateMs.toString()) }
+    var name by remember(channel.id, rev) { mutableStateOf(channel.name) }
+    var minText by remember(channel.id, rev) { mutableStateOf(channel.min.toString()) }
+    var maxText by remember(channel.id, rev) { mutableStateOf(channel.max.toString()) }
+    var min2Text by remember(channel.id, rev) { mutableStateOf(channel.min2.toString()) }
+    var max2Text by remember(channel.id, rev) { mutableStateOf(channel.max2.toString()) }
+    var onText by remember(channel.id, rev) { mutableStateOf(channel.onValue.toString()) }
+    var offText by remember(channel.id, rev) { mutableStateOf(channel.offValue.toString()) }
+    var rateText by remember(channel.id, rev) { mutableStateOf(channel.rateMs.toString()) }
     var editing by remember(channel.id) { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
@@ -353,10 +354,7 @@ fun ChannelModule(
                                             .width(96.dp)
                                             .clickable {
                                                 onDone(
-                                                    channel.copy(
-                                                        sensorKind = s.kind,
-                                                        sensorAxis = s.axes.first(),
-                                                    ),
+                                                    channel.copy(sensorKind = s.kind),
                                                 )
                                             }
                                             .padding(vertical = 8.dp),
@@ -571,7 +569,7 @@ fun ChannelModule(
                         numeric = true,
                         next = maxFocus,
                         onChange = {
-                            minText = it
+                            minText = cleanFloatInput(it)
                             pushRange()
                         },
                     )
@@ -583,7 +581,7 @@ fun ChannelModule(
                         numeric = true,
                         next = max2Focus,
                         onChange = {
-                            maxText = it
+                            maxText = cleanFloatInput(it)
                             pushRange()
                         },
                     )

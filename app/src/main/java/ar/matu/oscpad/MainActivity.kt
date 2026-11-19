@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
             try {
                 prefs.edit()
                     .putString("last_crash", android.util.Log.getStackTraceString(error).take(2000))
-                    .apply()
+                    .commit()
             } catch (e: Exception) {
             }
             defaultHandler?.uncaughtException(thread, error)
@@ -163,6 +163,7 @@ private fun App() {
     var presets by remember { mutableStateOf(PresetStore.load(context)) }
     var activePresetId by remember { mutableStateOf<Long?>(null) }
     var tab by remember { mutableStateOf(1) }
+    var dataRev by remember { mutableStateOf(0) }
     val history = remember { mutableStateListOf(1) }
     val activity = context as? Activity
     val activePreset = presets.find { it.id == activePresetId }
@@ -227,7 +228,23 @@ private fun App() {
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch(Dispatchers.IO) {
             val raw = try {
-                context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val out = java.io.ByteArrayOutputStream()
+                    val buf = ByteArray(8192)
+                    var total = 0
+                    var tooBig = false
+                    while (true) {
+                        val n = stream.read(buf)
+                        if (n < 0) break
+                        total += n
+                        if (total > 524288) {
+                            tooBig = true
+                            break
+                        }
+                        out.write(buf, 0, n)
+                    }
+                    if (tooBig) null else out.toString("UTF-8")
+                }
             } catch (e: Exception) {
                 null
             }
@@ -278,11 +295,11 @@ private fun App() {
         list.map { if (it.id == next.id) next else it }
 
     fun live(next: Channel) {
-        channels = replace(channels, next)
+        channels = replace(channels, next.clamped())
     }
 
     fun done(next: Channel) {
-        val updated = replace(channels, next)
+        val updated = replace(channels, next.clamped())
         channels = updated
         ChannelStore.save(context, updated)
     }
@@ -347,18 +364,27 @@ private fun App() {
 
     fun send(address: String, value: Float) {
         if (!address.startsWith('/')) return
-        scope.launch { sendNow(address, value) }
+        scope.launch(Dispatchers.IO) {
+            val ok = sender.send(Osc.encodeFloat(address, value))
+            launch(Dispatchers.Main) { markSent(ok) }
+        }
     }
 
     fun sendMany(address: String, values: FloatArray) {
         if (!address.startsWith('/')) return
-        scope.launch { sendManyNow(address, values) }
+        scope.launch(Dispatchers.IO) {
+            val ok = sender.send(Osc.encodeFloats(address, values))
+            launch(Dispatchers.Main) { markSent(ok) }
+        }
     }
 
     fun addChannel() {
         if (channels.size >= 8) return
+        val names = channels.map { it.name }.toSet()
+        var n = channels.size + 1
+        while ("canal$n" in names) n++
         val id = ChannelStore.nextId(context)
-        val updated = channels + Channel(id = id, name = "canal$id")
+        val updated = channels + Channel(id = id, name = "canal$n")
         channels = updated
         ChannelStore.save(context, updated)
         scope.launch {
@@ -399,29 +425,40 @@ private fun App() {
 
     val sensorSpecs = remember { listSensors(context) }
     val feeds = remember { mutableMapOf<Long, SensorFeed>() }
+    val feedKeys = remember { mutableMapOf<Long, Pair<String, Long>>() }
+    val uiThrottle = remember { mutableMapOf<Long, Throttle>() }
+    var appActive by remember { mutableStateOf(true) }
+    val activeState = rememberUpdatedState(appActive)
     val channelsState = rememberUpdatedState(channels)
     val sensorKeys = channels.filter { it.type == "sensor" }
         .map { it.id to (it.sensorKind to it.rateMs) }
 
     DisposableEffect(sensorKeys) {
         val wanted = sensorKeys.toMap()
-        feeds.keys.filter { it !in wanted }.forEach { feeds.remove(it)?.stop() }
+        (feeds.keys - wanted.keys).forEach {
+            feeds.remove(it)?.stop()
+            feedKeys.remove(it)
+        }
         wanted.forEach { (id, key) ->
-            if (feeds[id] == null) {
+            if (feedKeys[id] != key) {
+                feeds.remove(id)?.stop()
                 val channel = channelsState.value.firstOrNull { it.id == id } ?: return@forEach
                 val feed = SensorFeed(context, key.first, key.second) { norms ->
+                    if (!activeState.value) return@SensorFeed
                     channelsState.value.find { it.id == id }?.let { ch ->
                         val mapped = norms.map { n ->
                             ch.min + (ch.max - ch.min) * n.coerceIn(0f, 1f)
                         }
-                        live(
-                            ch.copy(
-                                level = mapped[0],
-                                level2 = mapped[1],
-                                level3 = mapped[2],
-                                level4 = mapped[3],
-                            ),
-                        )
+                        if (uiThrottle.getOrPut(id) { Throttle(100) }.shouldSend()) {
+                            live(
+                                ch.copy(
+                                    level = mapped[0],
+                                    level2 = mapped[1],
+                                    level3 = mapped[2],
+                                    level4 = mapped[3],
+                                ),
+                            )
+                        }
                         sendMany(ch.address(net.prefix), ch.copy(
                             level = mapped[0],
                             level2 = mapped[1],
@@ -431,6 +468,7 @@ private fun App() {
                     }
                 }
                 feeds[id] = feed
+                feedKeys[id] = key
                 feed.start()
             }
         }
@@ -439,8 +477,10 @@ private fun App() {
 
     DisposableEffect(Unit) {
         onDispose {
+            animJob?.cancel()
             feeds.values.forEach { it.stop() }
             feeds.clear()
+            feedKeys.clear()
         }
     }
 
@@ -450,26 +490,18 @@ private fun App() {
             .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "oscpad:live")
     }
 
-    var lastSubnetWarn by remember { mutableStateOf<String?>(null) }
-
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
+                    appActive = true
                     if (!wifiLock.isHeld) wifiLock.acquire()
-                    val ip = localIpv4() ?: "?"
-                    localIp = ip
-                    if (!sameSubnet(ip, net.host) && lastSubnetWarn != ip + net.host) {
-                        lastSubnetWarn = ip + net.host
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = "La red cambió: revisá la IP en Ajustes",
-                                duration = SnackbarDuration.Short,
-                            )
-                        }
-                    }
+                    localIp = localIpv4() ?: "?"
                 }
-                Lifecycle.Event.ON_PAUSE -> if (wifiLock.isHeld) wifiLock.release()
+                Lifecycle.Event.ON_PAUSE -> {
+                    appActive = false
+                    if (wifiLock.isHeld) wifiLock.release()
+                }
                 else -> Unit
             }
         }
@@ -547,7 +579,8 @@ private fun App() {
                             onSelect = { preset ->
                                 animJob?.cancel()
                                 val from = channels
-                                val to = preset.channels
+                                val to = preset.channels.map { it.clamped() }
+                                dataRev++
                                 activePresetId = preset.id
                                 if (from.map { it.id } == to.map { it.id }) {
                                     animJob = scope.launch {
@@ -946,6 +979,7 @@ private fun App() {
                                     onSendMany = ::sendMany,
                                     onDuplicate = { duplicate(channel) },
                                     prefix = net.prefix,
+                                    rev = dataRev,
                                 )
                             }
                         }
@@ -992,9 +1026,12 @@ private fun App() {
                                 channels = backup.channels
                                 presets = backup.presets
                                 net = backup.net
+                                dataRev++
                                 ChannelStore.save(context, backup.channels)
                                 PresetStore.save(context, backup.presets)
                                 NetStore.save(context, backup.net)
+                                ChannelStore.syncNextId(context, backup.channels.map { it.id })
+                                PresetStore.syncNextPresetId(context, backup.presets.map { it.id })
                                 activePresetId = null
                                 importCandidate = null
                             },

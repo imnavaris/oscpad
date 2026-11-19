@@ -51,7 +51,6 @@ data class Channel(
     val min2: Float = 0f,
     val max2: Float = 1f,
     val sensorKind: String = "accelerometer",
-    val sensorAxis: String = "x",
     val rateMs: Long = 50,
     val level4: Float = 0.5f,
     val mask: Int = 15,
@@ -80,12 +79,15 @@ fun decodeBackup(raw: String): OscBackup? = try {
         channels = backup.channels.map {
             val t = it.type
             it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
-        }.filter { it.name.isNotBlank() },
-        presets = backup.presets.filter { it.name.isNotBlank() },
+        }.filter { it.name.isNotBlank() }.map { it.clamped() }.take(32),
+        presets = backup.presets.filter { it.name.isNotBlank() }.take(64),
     )
 } catch (e: Exception) {
     null
 }
+
+fun bumpCounter(current: Long, used: List<Long>): Long =
+    maxOf(current, (used.maxOrNull() ?: 0L) + 1)
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -122,6 +124,13 @@ fun Channel.compLetter(i: Int) = when (type) {
 
 fun Channel.compEnabled(i: Int) = mask and (1 shl i) != 0
 
+fun Channel.clamped() = copy(
+    level = level.coerceIn(0f, 1f),
+    level2 = level2.coerceIn(0f, 1f),
+    level3 = level3.coerceIn(0f, 1f),
+    level4 = level4.coerceIn(0f, 1f),
+)
+
 fun Channel.toggleComp(i: Int) = copy(mask = mask xor (1 shl i))
 
 fun Channel.outputValues(): FloatArray {
@@ -154,16 +163,10 @@ fun localIpv4(): String? {
     }
 }
 
-fun sameSubnet(a: String, b: String): Boolean {
-    fun prefix(ip: String) = ip.trim().split(".").take(3)
-    val pa = prefix(a)
-    val pb = prefix(b)
-    return pa.size == 3 && pa == pb
-}
 fun sanitizeName(raw: String): String? {
     val clean = raw.trim()
         .replace(Regex("\\s+"), "_")
-        .filter { it.isLetterOrDigit() || it == '_' }
+        .filter { (it.isLetterOrDigit() && it.code < 128) || it == '_' }
         .take(24)
     if (clean.isEmpty()) return null
     return clean
@@ -183,7 +186,7 @@ object ChannelStore {
         if (main != null && main.isNotEmpty()) {
             return main.map {
                 val t = it.type
-                it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
+                it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader").clamped()
             }
         }
         if (prefs.getBoolean("had_channels", true)) {
@@ -194,7 +197,7 @@ object ChannelStore {
                 if (bak.isNotEmpty()) {
                     return bak.map {
                         val t = it.type
-                        it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader")
+                        it.copy(type = if (t == "button" || t == "xy" || t == "sensor" || t == "color") t else "fader").clamped()
                     }
                 }
             } catch (e2: Exception) {
@@ -220,6 +223,12 @@ object ChannelStore {
         prefs.edit().putLong("next_id", id + 1).apply()
         return id
     }
+
+    fun syncNextId(context: Context, used: List<Long>) {
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val cur = prefs.getLong("next_id", 1)
+        prefs.edit().putLong("next_id", bumpCounter(cur, used)).apply()
+    }
 }
 
 object PresetStore {
@@ -233,7 +242,9 @@ object PresetStore {
         } catch (e: Exception) {
             null
         }
-        if (main != null && main.isNotEmpty()) return main
+        if (main != null && main.isNotEmpty()) {
+            return main.map { it.copy(channels = it.channels.map { c -> c.clamped() }) }
+        }
         if (prefs.getBoolean("had_presets", true)) {
             try {
                 val bak = json.decodeFromString<List<Preset>>(
@@ -262,5 +273,11 @@ object PresetStore {
         val id = prefs.getLong("preset_next_id", 1)
         prefs.edit().putLong("preset_next_id", id + 1).apply()
         return id
+    }
+
+    fun syncNextPresetId(context: Context, used: List<Long>) {
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        val cur = prefs.getLong("preset_next_id", 1)
+        prefs.edit().putLong("preset_next_id", bumpCounter(cur, used)).apply()
     }
 }

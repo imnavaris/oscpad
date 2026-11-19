@@ -82,7 +82,12 @@ fun normalizeSensor(kind: String, axis: String, v: FloatArray, maxRange: Float):
     fun raw(): Float = when (axis) {
         "y" -> v.getOrElse(1) { 0f }
         "z" -> v.getOrElse(2) { 0f }
-        "magnitud" -> sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+        "magnitud" -> {
+            val x = v.getOrElse(0) { 0f }
+            val y = v.getOrElse(1) { 0f }
+            val z = v.getOrElse(2) { 0f }
+            sqrt(x * x + y * y + z * z)
+        }
         else -> v.getOrElse(0) { 0f }
     }
     val r = raw()
