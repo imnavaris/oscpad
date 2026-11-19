@@ -13,8 +13,9 @@ Controlador OSC Android → TouchDesigner. Kotlin + Compose Material3, un módul
 ## Reglas duras
 
 - **Cero comentarios en código.** Ni `//`, ni KDoc. La explicación va en el commit o el chat.
-- UI en español rioplatense. Tema oscuro propio (`OscScheme` en MainActivity).
+- UI en español rioplatense. Tema oscuro propio (`OscScheme`) + claro (`OscLightScheme`) en MainActivity, selector en Ajustes.
 - Un commit por lote verde. Commits en español, formato `tipo: qué` + cuerpo con el porqué.
+- Versionado semántico en `app/build.gradle.kts` (versionCode +1 siempre): fixes menores → parche (`x.x.X`, ej. 1.2.0→1.2.1); cambios visibles o comportamiento nuevo → menor (`x.X.0`, ej. 1.2.1→1.3.0).
 - No agregar dependencias sin motivo (material-icons-extended ya está por los iconos Save/Edit).
 
 ## Arquitectura
@@ -25,7 +26,7 @@ Controlador OSC Android → TouchDesigner. Kotlin + Compose Material3, un módul
 - `MainActivity.kt`: tabs (Inicio grilla / Canales carrusel / Presets / Ajustes), orden manual por drag, feed de sensores, AnimatedContent entre tabs.
 - `PresetsPanel.kt`: CRUD + reorder por long-press + chevron animado. Tap en fila = aplicar.
 - `SensorSpec.kt`: catálogo (sin proximidad) + `SensorFeed` de 4 componentes.
-- Tests JUnit en `app/src/test` (`.\gradlew.bat test`). 26 tests al cerrar este ciclo.
+- Tests JUnit en `app/src/test` (`.\gradlew.bat test`). 46 tests al cerrar este ciclo.
 
 ## Contrato OSC (no romper)
 
