@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -59,19 +61,17 @@ fun SettingsPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = "ESTE CELU",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = localIp,
-            style = MaterialTheme.typography.titleLarge,
-            fontFamily = Mono,
-            color = MaterialTheme.colorScheme.onSurface,
+        Field(
+            label = "Este celu",
+            value = localIp,
+            isError = false,
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = true,
+            onChange = {},
         )
         if (!sameSubnet(localIp, host)) {
             Text(
@@ -161,6 +161,7 @@ fun Field(
     isError: Boolean,
     modifier: Modifier = Modifier,
     numeric: Boolean = false,
+    readOnly: Boolean = false,
     onChange: (String) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
@@ -170,6 +171,8 @@ fun Field(
         modifier = modifier,
         label = { Text(label, style = MaterialTheme.typography.labelSmall) },
         singleLine = true,
+        readOnly = readOnly,
+        enabled = !readOnly,
         isError = isError,
         textStyle = MaterialTheme.typography.bodyMedium,
         shape = RoundedCornerShape(12.dp),

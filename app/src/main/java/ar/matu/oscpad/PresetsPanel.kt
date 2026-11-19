@@ -20,11 +20,18 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +83,7 @@ fun PresetsPanel(
 
     fun moveDrag(id: Long, dy: Float) {
         val list = dragging ?: return
-        var from = list.indexOfFirst { it.id == id }
+        val from = list.indexOfFirst { it.id == id }
         if (from == -1) return
         dragOffsetY += dy
         val fb = heights[id] ?: 200
@@ -160,7 +167,7 @@ fun PresetsPanel(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .animateItem()
+                            .then(if (dragId == preset.id) Modifier else Modifier.animateItem())
                             .onSizeChanged { heights[preset.id] = it.height }
                             .graphicsLayer {
                                 translationY = if (dragId == preset.id) dragOffsetY else 0f
@@ -211,6 +218,15 @@ fun PresetsPanel(
                                     singleLine = true,
                                     textStyle = MaterialTheme.typography.titleMedium,
                                     shape = RoundedCornerShape(8.dp),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            if (renameText.trim().isNotEmpty()) {
+                                                onRename(preset.id, renameText.trim())
+                                                renamingId = null
+                                            }
+                                        },
+                                    ),
                                 )
                                 IconButton(
                                     onClick = {
@@ -258,9 +274,11 @@ fun PresetsPanel(
                                     onClick = { onOverwrite(preset) },
                                     modifier = Modifier.size(40.dp),
                                 ) {
-                                    LabIcons.Save(
+                                    Icon(
+                                        imageVector = Icons.Filled.Save,
+                                        contentDescription = "Sobrescribir preset",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp),
+                                        modifier = Modifier.size(22.dp),
                                     )
                                 }
                                 IconButton(
@@ -270,9 +288,11 @@ fun PresetsPanel(
                                     },
                                     modifier = Modifier.size(40.dp),
                                 ) {
-                                    LabIcons.Pencil(
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = "Renombrar preset",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp),
+                                        modifier = Modifier.size(22.dp),
                                     )
                                 }
                                 IconButton(

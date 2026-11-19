@@ -308,39 +308,6 @@ object LabIcons {
     }
 
     @Composable
-    fun Pencil(tint: Color, modifier: Modifier = Modifier) {
-        Canvas(modifier) {
-            val w = 2.6.dp.toPx()
-            drawLine(
-                color = tint,
-                start = Offset(size.width * 0.26f, size.height * 0.72f),
-                end = Offset(size.width * 0.6f, size.height * 0.38f),
-                strokeWidth = w,
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = tint,
-                start = Offset(size.width * 0.6f, size.height * 0.38f),
-                end = Offset(size.width * 0.78f, size.height * 0.2f),
-                strokeWidth = w * 0.62f,
-                cap = StrokeCap.Round,
-            )
-            drawCircle(
-                color = tint,
-                radius = w * 0.32f,
-                center = Offset(size.width * 0.79f, size.height * 0.19f),
-            )
-            drawLine(
-                color = tint,
-                start = Offset(size.width * 0.22f, size.height * 0.62f),
-                end = Offset(size.width * 0.3f, size.height * 0.76f),
-                strokeWidth = w,
-                cap = StrokeCap.Round,
-            )
-        }
-    }
-
-    @Composable
     fun ChevronDown(tint: Color, modifier: Modifier = Modifier) {
         Canvas(modifier) {
             val w = 2.6.dp.toPx()
@@ -357,38 +324,6 @@ object LabIcons {
                 end = Offset(size.width * 0.72f, size.height * 0.4f),
                 strokeWidth = w,
                 cap = StrokeCap.Round,
-            )
-        }
-    }
-
-    @Composable
-    fun Save(tint: Color, modifier: Modifier = Modifier) {
-        Canvas(modifier) {
-            val w = 2.dp.toPx()
-            val left = size.width * 0.22f
-            val top = size.height * 0.12f
-            val right = size.width * 0.78f
-            val bottom = size.height * 0.88f
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(left, top),
-                size = Size(right - left, bottom - top),
-                cornerRadius = CornerRadius(2.dp.toPx()),
-                style = Stroke(w),
-            )
-            val slotH = (bottom - top) * 0.3f
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(left + (right - left) * 0.24f, top + w / 2),
-                size = Size((right - left) * 0.52f, slotH),
-                cornerRadius = CornerRadius(1.dp.toPx()),
-            )
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(left + (right - left) * 0.16f, bottom - (bottom - top) * 0.34f),
-                size = Size((right - left) * 0.68f, (bottom - top) * 0.22f),
-                cornerRadius = CornerRadius(1.dp.toPx()),
-                style = Stroke(w * 0.8f),
             )
         }
     }

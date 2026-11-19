@@ -8,8 +8,14 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,11 +63,19 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -101,7 +115,22 @@ private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var net by remember { mutableStateOf(NetStore.load(context)) }
-    var channels by remember { mutableStateOf(ChannelStore.load(context).sortedBy { it.id }) }
+    var channels by remember {
+        mutableStateOf(ChannelStore.load(context).let { loaded ->
+            val prefs = context.getSharedPreferences("oscpad", Context.MODE_PRIVATE)
+            if (prefs.getBoolean("order_migrated", false)) {
+                loaded
+            } else {
+                val sorted = loaded.sortedBy { it.id }
+                if (sorted.map { it.id } != loaded.map { it.id }) {
+                    ChannelStore.save(context, sorted)
+                }
+                prefs.edit().putBoolean("order_migrated", true).apply()
+                sorted
+            }
+        })
+    }
+    var localIp by remember { mutableStateOf(localIpv4() ?: "?") }
     var presets by remember { mutableStateOf(PresetStore.load(context)) }
     var activePresetId by remember { mutableStateOf<Long?>(null) }
     var tab by remember { mutableStateOf(1) }
@@ -173,8 +202,11 @@ private fun App() {
     }
 
     fun markSent(ok: Boolean) {
-        connOk = ok
-        connAt = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        if (ok != connOk || now - connAt > 1000) {
+            connOk = ok
+            connAt = now
+        }
     }
 
     fun send(address: String, value: Float) {
@@ -214,19 +246,25 @@ private fun App() {
 
     DisposableEffect(sensorKeys) {
         val wanted = sensorKeys.map { it.first to it.third }.toMap()
+        feeds.keys.filter { it !in wanted }.forEach { feeds.remove(it)?.stop() }
         wanted.forEach { (id, key) ->
-            if (feeds[id] != null) return@forEach
-            val channel = channelsState.value.first { it.id == id }
-            val feed = SensorFeed(context, key.first, key.second, key.third) { norm ->
-                channelsState.value.find { it.id == id }?.let { ch ->
-                    val v = ch.min + (ch.max - ch.min) * norm.coerceIn(0f, 1f)
-                    live(ch.copy(level = v))
-                    send(ch.address(), v)
+            if (feeds[id] == null) {
+                val channel = channelsState.value.firstOrNull { it.id == id } ?: return@forEach
+                val feed = SensorFeed(context, key.first, key.second, key.third) { norm ->
+                    channelsState.value.find { it.id == id }?.let { ch ->
+                        val v = ch.min + (ch.max - ch.min) * norm.coerceIn(0f, 1f)
+                        live(ch.copy(level = v))
+                        send(ch.address(), v)
+                    }
                 }
+                feeds[id] = feed
+                feed.start()
             }
-            feeds[id] = feed
-            feed.start()
         }
+        onDispose { }
+    }
+
+    DisposableEffect(Unit) {
         onDispose {
             feeds.values.forEach { it.stop() }
             feeds.clear()
@@ -242,7 +280,10 @@ private fun App() {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> if (!wifiLock.isHeld) wifiLock.acquire()
+                Lifecycle.Event.ON_RESUME -> {
+                    if (!wifiLock.isHeld) wifiLock.acquire()
+                    localIp = localIpv4() ?: "?"
+                }
                 Lifecycle.Event.ON_PAUSE -> if (wifiLock.isHeld) wifiLock.release()
                 else -> Unit
             }
@@ -305,16 +346,23 @@ private fun App() {
                     .fillMaxWidth()
                     .imePadding(),
             ) {
-                when (tab) {
+                AnimatedContent(
+                    targetState = tab,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(150)) togetherWith
+                            fadeOut(animationSpec = tween(150))
+                    },
+                    label = "tab",
+                ) { t ->
+                when (t) {
                     2 -> {
                         PresetsPanel(
                             presets = presets,
                             activeId = activePresetId,
                             onSelect = { preset ->
-                                val ordered = preset.channels.sortedBy { it.id }
-                                channels = ordered
+                                channels = preset.channels
                                 net = preset.net
-                                ChannelStore.save(context, ordered)
+                                ChannelStore.save(context, preset.channels)
                                 NetStore.save(context, preset.net)
                                 activePresetId = preset.id
                             },
@@ -370,13 +418,12 @@ private fun App() {
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             SettingsPanel(
                             net = net,
-                            localIp = remember { localIpv4() ?: "?" },
+                            localIp = localIp,
                             onChange = {
                                 net = it
                                 NetStore.save(context, it)
                             },
-                            onTestAll = {
-                                channels.forEach {
+                            onTestAll = {    channels.forEach {
                                     when (it.type) {
                                         "xy" -> sendMany(it.address(), it.xyValues())
                                         "color" -> sendMany(
@@ -396,6 +443,44 @@ private fun App() {
                         }
                     }
                     0 -> {
+                        var gridDragId by remember { mutableStateOf<Long?>(null) }
+                        var gridDragOffset by remember { mutableStateOf(Offset.Zero) }
+                        var gridDragFrom by remember { mutableStateOf(-1) }
+                        var gridSlots by remember { mutableStateOf(listOf<Rect>()) }
+                        val gridRects = remember { mutableMapOf<Long, Rect>() }
+                        var draggingCells by remember { mutableStateOf<List<Channel>?>(null) }
+                        val shownChannels = draggingCells ?: channels
+
+                        fun finishGridDrag(commit: Boolean) {
+                            val order = draggingCells
+                            draggingCells = null
+                            gridDragId = null
+                            gridDragOffset = Offset.Zero
+                            gridDragFrom = -1
+                            if (commit && order != null && order.map { it.id } != channels.map { it.id }) {
+                                channels = order
+                                ChannelStore.save(context, order)
+                                activePresetId = null
+                            }
+                        }
+
+                        fun moveGridDrag(amount: Offset) {
+                            val list = draggingCells ?: return
+                            val from = gridDragFrom
+                            if (from == -1 || gridSlots.size != list.size) return
+                            gridDragOffset += amount
+                            val point = gridSlots[from].center + gridDragOffset
+                            val target = gridSlots.indexOfFirst { it.contains(point) }
+                            if (target != -1 && target != from) {
+                                val next = list.toMutableList()
+                                val item = next.removeAt(from)
+                                next.add(target, item)
+                                draggingCells = next
+                                gridDragOffset -= (gridSlots[target].topLeft - gridSlots[from].topLeft)
+                                gridDragFrom = target
+                            }
+                        }
+
                         if (channels.isEmpty()) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
@@ -414,16 +499,54 @@ private fun App() {
                                 contentPadding = PaddingValues(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
+                                userScrollEnabled = gridDragId == null,
                             ) {
-                                items(channels, key = { it.id }) { channel ->
-                                    val idx = channels.indexOfFirst { it.id == channel.id }
+                                items(shownChannels, key = { it.id }) { channel ->
                                     Column(
-                                        modifier = Modifier.clickable {
-                                            selectTab(1)
-                                            scope.launch {
-                                                listState.animateScrollToItem(idx * 2)
+                                        modifier = Modifier
+                                            .then(if (gridDragId == channel.id) Modifier else Modifier.animateItem())
+                                            .onGloballyPositioned {
+                                                gridRects[channel.id] = Rect(
+                                                    it.positionInWindow(),
+                                                    Size(
+                                                        it.size.width.toFloat(),
+                                                        it.size.height.toFloat(),
+                                                    ),
+                                                )
                                             }
-                                        },
+                                            .graphicsLayer {
+                                                if (gridDragId == channel.id) {
+                                                    translationX = gridDragOffset.x
+                                                    translationY = gridDragOffset.y
+                                                }
+                                            }
+                                            .zIndex(if (gridDragId == channel.id) 1f else 0f)
+                                            .pointerInput(channel.id) {
+                                                detectDragGesturesAfterLongPress(
+                                                    onDragStart = {
+                                                        if (gridRects.size == channels.size) {
+                                                            val slots = channels.mapNotNull { gridRects[it.id] }
+                                                            if (slots.size == channels.size) {
+                                                                gridSlots = slots
+                                                                draggingCells = channels
+                                                                gridDragId = channel.id
+                                                                gridDragOffset = Offset.Zero
+                                                                gridDragFrom = channels.indexOfFirst { it.id == channel.id }
+                                                            }
+                                                        }
+                                                    },
+                                                    onDrag = { _, amount -> moveGridDrag(amount) },
+                                                    onDragEnd = { finishGridDrag(true) },
+                                                    onDragCancel = { finishGridDrag(false) },
+                                                )
+                                            }
+                                            .clickable {
+                                                selectTab(1)
+                                                scope.launch {
+                                                    val idx = shownChannels.indexOfFirst { it.id == channel.id }
+                                                    listState.animateScrollToItem(idx * 2)
+                                                }
+                                            },
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
                                         Text(
@@ -521,6 +644,7 @@ private fun App() {
                             )
                         }
                     }
+                }
                 }
                 }
                 }
