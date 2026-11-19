@@ -16,7 +16,7 @@ object Osc {
         val addressBytes = address.toByteArray(Charsets.US_ASCII)
         val padded = ((addressBytes.size + 1 + 3) / 4) * 4
         val tags = ByteArray(values.size + 1) { if (it == 0) 0x2C else 0x66 }
-        val tagPadded = ((tags.size + 3) / 4) * 4
+        val tagPadded = ((tags.size + 1 + 3) / 4) * 4
         val buffer = ByteBuffer.allocate(padded + tagPadded + 4 * values.size).order(ByteOrder.BIG_ENDIAN)
         buffer.put(addressBytes)
         buffer.put(ByteArray(padded - addressBytes.size))

@@ -45,8 +45,11 @@ def main():
     print(f"escuchando UDP {port}")
     while True:
         data, peer = sock.recvfrom(65535)
-        for address, args in parse(data):
-            print(peer[0], address, args, flush=True)
+        try:
+            for address, args in parse(data):
+                print(peer[0], address, args, flush=True)
+        except Exception as e:
+            print(peer[0], "ERROR", e, data.hex(), flush=True)
 
 
 if __name__ == "__main__":

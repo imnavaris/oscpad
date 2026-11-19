@@ -1,6 +1,7 @@
 package ar.matu.oscpad
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -55,6 +56,16 @@ class OscTest {
         assertTrue(throttle.shouldSend(0))
         assertFalse(throttle.shouldSend(50))
         assertTrue(throttle.shouldSend(100))
+    }
+
+    @Test
+    fun encodeFloatsPadsThreeFloatTagsWithNull() {
+        val bytes = Osc.encodeFloats("/ab", floatArrayOf(1f, 2f, 3f))
+        assertEquals(24, bytes.size)
+        assertArrayEquals(
+            byteArrayOf(0x2F, 0x61, 0x62, 0x00, 0x2C, 0x66, 0x66, 0x66),
+            bytes.copyOfRange(0, 8),
+        )
     }
 
     @Test
